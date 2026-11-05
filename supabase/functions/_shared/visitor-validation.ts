@@ -21,3 +21,26 @@ export function normalizeVisitorName(input: string): string | null {
   if (name.length < 2 || name.length > 120 || /[\u0000-\u001f\u007f]/.test(name)) return null
   return name
 }
+
+function isCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return false
+  const [, year, month, day] = match.map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+}
+
+export function isValidServiceDate(value: string, today: string): boolean {
+  return isCalendarDate(value) && isCalendarDate(today) && value <= today
+}
+
+export function isValidPrayerRequest(value: string): boolean {
+  const normalized = value.normalize('NFKC')
+  return normalized.length <= 2000 && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(normalized)
+}
+
+export function normalizePrayerRequest(value: string): string | null {
+  if (!isValidPrayerRequest(value)) return null
+  const request = value.normalize('NFKC').replace(/\r\n?/g, '\n').trim()
+  return request || null
+}

@@ -1,5 +1,11 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import { normalizeBrazilianPhone, normalizeVisitorName } from '../_shared/visitor-validation.ts'
+import {
+  isValidPrayerRequest,
+  isValidServiceDate,
+  normalizeBrazilianPhone,
+  normalizePrayerRequest,
+  normalizeVisitorName,
+} from '../_shared/visitor-validation.ts'
 
 const successBody = {
   ok: true,
@@ -46,6 +52,17 @@ function getIp(request: Request): string {
   return forwarded || 'unknown'
 }
 
+function saoPauloToday(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const value = Object.fromEntries(parts.map(part => [part.type, part.value]))
+  return `${value.year}-${value.month}-${value.day}`
+}
+
 Deno.serve(async (request) => {
   const origin = request.headers.get('origin')
   if (origin && !allowedOrigins.includes(origin)) {
@@ -81,17 +98,25 @@ Deno.serve(async (request) => {
   }
   if (!secretKey) return jsonResponse({ ok: false, message: 'O cadastro está temporariamente indisponível.' }, 503, origin)
 
-  let payload: { name?: unknown; phone?: unknown; website?: unknown; startedAt?: unknown }
+  let payload: {
+    name?: unknown
+    phone?: unknown
+    visitedOn?: unknown
+    prayerRequest?: unknown
+    contactConsent?: unknown
+    website?: unknown
+    startedAt?: unknown
+  }
   try {
     const rawBody = await request.text()
-    if (new TextEncoder().encode(rawBody).byteLength > 2048) {
+    if (new TextEncoder().encode(rawBody).byteLength > 16384) {
       return jsonResponse({ ok: false, message: 'Solicitação inválida.' }, 413, origin)
     }
     const parsed: unknown = JSON.parse(rawBody)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return jsonResponse({ ok: false, message: 'Confira os dados e tente novamente.' }, 400, origin)
     }
-    payload = parsed as { name?: unknown; phone?: unknown; website?: unknown; startedAt?: unknown }
+    payload = parsed as typeof payload
   } catch {
     return jsonResponse({ ok: false, message: 'Confira os dados e tente novamente.' }, 400, origin)
   }
@@ -124,13 +149,26 @@ Deno.serve(async (request) => {
 
     const fullName = typeof payload.name === 'string' ? normalizeVisitorName(payload.name) : null
     const phone = typeof payload.phone === 'string' ? normalizeBrazilianPhone(payload.phone) : null
-    if (!fullName || !phone) {
-      return jsonResponse({ ok: false, message: 'Confira o nome e o telefone com DDD.' }, 400, origin)
+    const visitedOn = typeof payload.visitedOn === 'string' && isValidServiceDate(payload.visitedOn, saoPauloToday())
+      ? payload.visitedOn
+      : null
+    const prayerInput = typeof payload.prayerRequest === 'string' ? payload.prayerRequest : ''
+    const prayerRequest = normalizePrayerRequest(prayerInput)
+    const invalidPrayerType = payload.prayerRequest !== undefined
+      && payload.prayerRequest !== null
+      && typeof payload.prayerRequest !== 'string'
+
+    if (!fullName || !phone || !visitedOn || typeof payload.contactConsent !== 'boolean'
+      || invalidPrayerType || !isValidPrayerRequest(prayerInput)) {
+      return jsonResponse({ ok: false, message: 'Confira seu nome, telefone, data do culto e demais campos.' }, 400, origin)
     }
 
-    const { error: registrationError } = await client.rpc('register_public_visitor', {
+    const { error: registrationError } = await client.rpc('register_public_visitor_details', {
       p_full_name: fullName,
       p_phone_normalized: phone,
+      p_visited_on: visitedOn,
+      p_contact_consent: payload.contactConsent,
+      p_prayer_request: prayerRequest,
     })
     if (registrationError) return jsonResponse({ ok: false, message: 'Não foi possível concluir agora. Tente novamente mais tarde.' }, 503, origin)
 

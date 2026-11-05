@@ -1,5 +1,9 @@
 # Migrations do Supabase
 
+## Campos adicionais no formulário público
+
+A migration `202611050002_visitor_service_details.sql` adiciona a data do culto e o consentimento de contato à tabela `visitors`. Os pedidos de oração ficam em `visitor_prayer_requests`, com RLS habilitado e leitura restrita aos perfis admin e pastoral. A Edge Function atualizada chama uma RPC privada; aplique essa migration antes de publicar a nova versão da função e do frontend.
+
 As migrations ficam aqui em ordem cronológica (`YYYYMMDDHHMMSS_descricao.sql`). A migration inicial verifica se os nomes planejados já existem e aborta em caso de colisão; ela não apaga nem altera tabelas existentes.
 
 ## Aplicar ao projeto remoto

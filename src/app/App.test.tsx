@@ -60,20 +60,33 @@ describe('rotas e autenticação da equipe', () => {
     expect(screen.getByRole('alert').textContent).toContain('Confira seu e-mail e sua senha')
   })
 
-  it('mantém o formulário público acessível sem sessão e mostra apenas os campos de nome e telefone', async () => {
+  it('mantém o formulário público acessível sem sessão e envia os campos adicionais do cadastro', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={['/visitante']}><App /></MemoryRouter>)
     expect(screen.getByRole('heading', { name: 'Vamos manter contato?' })).toBeTruthy()
     expect(screen.getByLabelText('Seu nome')).toBeTruthy()
     expect(screen.getByLabelText('Telefone com DDD')).toBeTruthy()
+    expect(screen.getByLabelText(/Dia em que você foi ao culto/)).toBeTruthy()
+    expect(screen.getByLabelText(/Deseja deixar um pedido de oração/)).toBeTruthy()
+    expect(screen.getByRole('checkbox', { name: /Aceito receber uma mensagem/ })).toBeTruthy()
     expect(screen.queryByLabelText('E-mail')).toBeNull()
     expect(screen.queryByLabelText('Senha')).toBeNull()
     await user.type(screen.getByLabelText('Seu nome'), 'Marina Exemplo')
     await user.type(screen.getByLabelText('Telefone com DDD'), '11987654321')
+    await user.type(screen.getByLabelText(/Deseja deixar um pedido de oração/), 'Ore por nossa família.')
+    await user.click(screen.getByRole('checkbox', { name: /Aceito receber uma mensagem/ }))
     await user.click(screen.getByRole('button', { name: 'Enviar meu cadastro' }))
     await waitFor(() => expect(authMocks.invokeVisitorFunction).toHaveBeenCalledWith(
       'public-visitor-register',
-      expect.objectContaining({ body: expect.objectContaining({ name: 'Marina Exemplo', phone: '11987654321', website: '', startedAt: expect.any(Number) }) }),
+      expect.objectContaining({ body: expect.objectContaining({
+        name: 'Marina Exemplo',
+        phone: '+5511987654321',
+        visitedOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        prayerRequest: 'Ore por nossa família.',
+        contactConsent: true,
+        website: '',
+        startedAt: expect.any(Number),
+      }) }),
     ))
     expect(await screen.findByRole('status')).toBeTruthy()
   })
