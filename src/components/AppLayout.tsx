@@ -27,7 +27,7 @@ export function AppLayout() {
       <nav className="mt-3 flex flex-col gap-1">
         {links.map(({ to, label, icon: Icon, end }) => <NavLink key={to} to={to} end={end} className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}><Icon size={18} strokeWidth={1.8} /><span>{label}</span></NavLink>)}
       </nav>
-      <div className="mt-auto rounded-2xl bg-[#dfffdf] p-4"><div className="mb-3 grid size-9 place-items-center rounded-xl bg-white text-primary"><Sparkles size={17} /></div><p className="text-sm font-medium">Um lugar para pertencer</p><p className="mt-1 text-xs leading-5 text-muted">Acolhendo pessoas com cuidado, em cada etapa.</p></div>
+      <div className="mt-auto rounded-2xl bg-[#f0f2e9] p-4"><div className="mb-3 grid size-9 place-items-center rounded-xl bg-white text-primary"><Sparkles size={17} /></div><p className="text-sm font-medium">Um lugar para pertencer</p><p className="mt-1 text-xs leading-5 text-muted">Acolhendo pessoas com cuidado, em cada etapa.</p></div>
       <div className="mt-5 flex items-center justify-between gap-2 border-t border-border pt-4"><div className="min-w-0"><p className="truncate text-xs font-medium">{email}</p><p className="text-[11px] text-muted">Equipe</p></div><Button variant="ghost" size="icon" aria-label="Sair" onClick={signOut}><LogOut size={17} /></Button></div>
     </aside>
     <div className="md:pl-[264px]">
