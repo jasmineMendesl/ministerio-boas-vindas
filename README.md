@@ -1,6 +1,6 @@
-# Projeto Pertencer
+# Ministério de Boas-Vindas
 
-Aplicação mobile-first para o Ministério de Boas-Vindas. Inclui autenticação da equipe, quatro áreas internas e cadastro público de visitantes.
+Aplicação mobile-first do Ministério de Boas-Vindas. Inclui autenticação da equipe, quatro áreas internas e cadastro público de visitantes. Projeto Pertencer é o café com visitantes realizado pelo ministério.
 
 ## Executar localmente
 
