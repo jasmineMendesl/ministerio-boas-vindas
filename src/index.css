@@ -37,4 +37,17 @@ button, input { font: inherit; }
 .welcome-orbit-one { width: 430px; height: 430px; top: 17%; right: -260px; }
 .welcome-orbit-two { width: 320px; height: 320px; top: 22%; right: -205px; }
 .visitor-honeypot { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; border: 0 !important; }
+.visitor-print-sheet { display: none; }
+@media print {
+  body * { visibility: hidden !important; }
+  .visitor-print-sheet, .visitor-print-sheet * { visibility: visible !important; }
+  .visitor-print-sheet { display: block !important; position: absolute; inset: 0; width: 100%; padding: 10mm; color: #222820; font-family: Arial, sans-serif; text-align: center; }
+  .visitor-print-sheet h1 { margin: 0 0 3mm; font-size: 16pt; }
+  .visitor-print-sheet > p { margin: 0 0 8mm; font-size: 9pt; }
+  .visitor-print-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8mm; }
+  .visitor-print-grid article { display: flex; min-height: 125mm; flex-direction: column; align-items: center; justify-content: center; border: 1px dashed #9aa59a; padding: 8mm; }
+  .visitor-print-grid h2 { font-size: 14pt; }
+  .visitor-print-grid img { width: 55mm; height: 55mm; margin: 4mm auto; }
+  .visitor-print-grid p { font-size: 8pt; }
+}
 @keyframes rise { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }

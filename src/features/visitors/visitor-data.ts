@@ -6,6 +6,7 @@ export type VisitorVisit = {
   id: string
   registeredAt: string
   source: VisitSource
+  serviceLabel: string
 }
 
 export type GiftDelivery = {
@@ -22,6 +23,8 @@ export type VisitorPerson = {
   phoneNormalized: string
   visits: VisitorVisit[]
   gifts: GiftDelivery[]
+  prayerRequest: string | null
+  staffNote: string
 }
 
 export type ManualVisitResult =
@@ -42,34 +45,42 @@ export function createDemoVisitors(now = new Date()): VisitorPerson[] {
       fullName: 'Visitante Exemplo 01',
       phoneNormalized: '+5511900000001',
       visits: [
-        { id: 'demo-visit-01a', registeredAt: demoDate(now, 20), source: 'qr' },
-        { id: 'demo-visit-01b', registeredAt: demoDate(now, 0), source: 'qr' },
+        { id: 'demo-visit-01a', registeredAt: demoDate(now, 20), source: 'qr', serviceLabel: 'Domingo - Noite (18:30)' },
+        { id: 'demo-visit-01b', registeredAt: demoDate(now, 0), source: 'qr', serviceLabel: 'Domingo - Noite (18:30)' },
       ],
-      gifts: [{ id: 'demo-gift-01', deliveredAt: demoDate(now, 5), giftType: 'Lembrancinha de boas-vindas', quantity: 1, responsible: 'Equipe de demonstração' }],
+      gifts: [{ id: 'demo-gift-01', deliveredAt: demoDate(now, 5), giftType: 'Marca-página de boas-vindas', quantity: 1, responsible: 'Equipe de demonstração' }],
+      prayerRequest: 'Pedido fictício: que a família encontre saúde, paz e força.',
+      staffNote: 'Demonstração: acolher com atenção na próxima visita.',
     },
     {
       id: 'demo-person-02',
       fullName: 'Visitante Exemplo 02',
       phoneNormalized: '+5511900000002',
-      visits: [{ id: 'demo-visit-02a', registeredAt: demoDate(now, 6), source: 'qr' }],
+      visits: [{ id: 'demo-visit-02a', registeredAt: demoDate(now, 6), source: 'qr', serviceLabel: 'Domingo - Noite (18:30)' }],
       gifts: [],
+      prayerRequest: null,
+      staffNote: '',
     },
     {
       id: 'demo-person-03',
       fullName: 'Visitante Demonstração 03',
       phoneNormalized: '+5511900000003',
       visits: [
-        { id: 'demo-visit-03a', registeredAt: demoDate(now, 35), source: 'staff' },
-        { id: 'demo-visit-03b', registeredAt: demoDate(now, 1), source: 'qr' },
+        { id: 'demo-visit-03a', registeredAt: demoDate(now, 35), source: 'staff', serviceLabel: 'Domingo Manhã (09:00)' },
+        { id: 'demo-visit-03b', registeredAt: demoDate(now, 1), source: 'qr', serviceLabel: 'Domingo - Noite (18:30)' },
       ],
       gifts: [],
+      prayerRequest: 'Pedido fictício de oração por uma pessoa querida.',
+      staffNote: '',
     },
     {
       id: 'demo-person-04',
       fullName: 'Visitante Exemplo 04',
       phoneNormalized: '+5511900000004',
-      visits: [{ id: 'demo-visit-04a', registeredAt: demoDate(now, 48), source: 'qr' }],
+      visits: [{ id: 'demo-visit-04a', registeredAt: demoDate(now, 48), source: 'qr', serviceLabel: 'Domingo Manhã (09:00)' }],
       gifts: [],
+      prayerRequest: null,
+      staffNote: '',
     },
   ]
 }
@@ -87,7 +98,7 @@ export function addManualVisit(
   const phoneNormalized = normalizeBrazilianPhone(phoneInput)
   if (!phoneNormalized) return { ok: false, error: 'phone' }
 
-  const visit: VisitorVisit = { id: makeId(), registeredAt, source: 'staff' }
+  const visit: VisitorVisit = { id: makeId(), registeredAt, source: 'staff', serviceLabel: 'Domingo - Noite (18:30)' }
   const existing = people.find(person => person.phoneNormalized === phoneNormalized)
   if (existing) {
     return {
@@ -104,6 +115,8 @@ export function addManualVisit(
     phoneNormalized,
     visits: [visit],
     gifts: [],
+    prayerRequest: null,
+    staffNote: '',
   }
   return { ok: true, people: [...people, person], personId: person.id, reusedPerson: false }
 }
@@ -122,12 +135,18 @@ export function visitorHasVisitInPeriod(person: VisitorPerson, month: number, ye
   })
 }
 
-export function filterVisitors(people: VisitorPerson[], query: string, month: number, year: number): VisitorPerson[] {
+export function filterVisitors(people: VisitorPerson[], query: string, month: number, year: number, serviceLabel?: string): VisitorPerson[] {
   const normalizedQuery = query.trim().toLocaleLowerCase('pt-BR')
   const digits = query.replace(/\D/g, '')
 
   return people.filter(person => {
-    if (!visitorHasVisitInPeriod(person, month, year)) return false
+    const hasMatchingVisit = person.visits.some(({ registeredAt, serviceLabel: visitService }) => {
+      const date = new Date(registeredAt)
+      return (month === 0 || date.getMonth() + 1 === month)
+        && (year === 0 || date.getFullYear() === year)
+        && (!serviceLabel || visitService === serviceLabel)
+    })
+    if (!hasMatchingVisit) return false
     if (!normalizedQuery) return true
     return person.fullName.toLocaleLowerCase('pt-BR').includes(normalizedQuery)
       || (digits.length > 0 && person.phoneNormalized.replace(/\D/g, '').includes(digits))

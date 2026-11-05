@@ -3,52 +3,65 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 
 const visitorAuth = vi.hoisted(() => ({ email: 'equipe@exemplo.org' }))
 
-vi.mock('../../app/AuthProvider', () => ({
-  useAuth: () => ({ session: { user: { email: visitorAuth.email } }, loading: false }),
-}))
-
+vi.mock('../../app/AuthProvider', () => ({ useAuth: () => ({ session: { user: { email: visitorAuth.email } }, loading: false }) }))
 vi.mock('qrcode', () => ({ default: { toDataURL: vi.fn().mockResolvedValue('data:image/png;base64,qr-demo') } }))
 
 import { VisitorsPage } from './VisitorsPage'
 
-describe('tela de visitantes em modo de demonstração', () => {
+describe('tela de visitantes em demonstração', () => {
   afterEach(() => cleanup())
 
-  it('exibe indicadores, aviso de demonstração e QR Code sem botão de detalhes ou contador de visitas', async () => {
+  it('exibe o layout, indicadores, aviso de dados fictícios e QR Code público', async () => {
     render(<VisitorsPage />)
 
-    expect(screen.getByText(/Modo de demonstração/)).toBeTruthy()
-    expect(screen.getByText('Visitantes do mês')).toBeTruthy()
-    expect(screen.getByText('Visitantes de hoje')).toBeTruthy()
-    expect(screen.getByText('Lembrancinhas entregues')).toBeTruthy()
-    expect(await screen.findByRole('img', { name: /QR Code para abrir/ })).toBeTruthy()
-    expect(screen.getByRole('link', { name: /Abrir formulário/ }).getAttribute('href')).toContain('/visitante')
-    expect(screen.queryByRole('button', { name: /Detalhes/ })).toBeNull()
-    expect(screen.queryByText(/\b\d+ visitas?\b/)).toBeNull()
+    expect(screen.getByRole('heading', { name: 'Visitantes' })).toBeTruthy()
+    expect(screen.getByText(/Demonstração fictícia/)).toBeTruthy()
+    expect(screen.getByText('Marca-páginas Entregues')).toBeTruthy()
+    expect(screen.getByText('Cadastros via QR Code')).toBeTruthy()
+    expect(screen.getByText('Taxa de Preenchimento')).toBeTruthy()
+    expect(screen.getByText('Visitantes Cadastrados')).toBeTruthy()
+    expect(await screen.findByRole('img', { name: /QR Code do formulário/ })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /Testar formulário/ }).getAttribute('href')).toContain('/visitante')
   })
 
-  it('permite registrar uma única lembrancinha apenas para a primeira visita', async () => {
+  it('abre o olho para exibir o pedido de oração fictício', () => {
     render(<VisitorsPage />)
-    fireEvent.change(screen.getByLabelText('Filtrar por mês'), { target: { value: '0' } })
-    fireEvent.change(screen.getByLabelText('Filtrar por ano'), { target: { value: '0' } })
+    fireEvent.change(screen.getByLabelText('Filtrar mês'), { target: { value: '0' } })
+    fireEvent.change(screen.getByLabelText('Filtrar ano'), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: /Ver detalhes de Visitante Demonstração 03/ }))
 
-    const recurringVisitor = screen.getByText('Visitante Demonstração 03').closest('article')
-    expect(recurringVisitor).toBeTruthy()
-    expect(recurringVisitor?.querySelector('button')).toBeNull()
-    expect(recurringVisitor?.textContent).toContain('Indisponível para visita recorrente')
+    const detail = screen.getByRole('dialog')
+    expect(detail.textContent).toContain('Pedido fictício de oração por uma pessoa querida.')
+    expect(detail.textContent).toContain('Detalhes do visitante · exemplo fictício')
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: /Cadastrar visitante/ }))
-    fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'Visitante de Teste 01' } })
-    fireEvent.change(screen.getByLabelText('Telefone com DDD'), { target: { value: '(11) 99999-1000' } })
-    fireEvent.click(screen.getByRole('button', { name: /Adicionar visita/ }))
-    const firstVisitVisitor = (await screen.findByText('Visitante de Teste 01')).closest('article')
-    const deliverButton = firstVisitVisitor?.querySelector('button')
-    expect(deliverButton?.textContent).toContain('Registrar entrega')
-    fireEvent.click(deliverButton!)
+  it('permite adicionar informação local e registrar o marca-página uma vez na primeira visita', async () => {
+    render(<VisitorsPage />)
+    fireEvent.change(screen.getByLabelText('Filtrar mês'), { target: { value: '0' } })
+    fireEvent.change(screen.getByLabelText('Filtrar ano'), { target: { value: '0' } })
 
-    await waitFor(() => expect(screen.getByText(/Entrega adicionada aos dados de demonstração/)).toBeTruthy())
-    expect(firstVisitVisitor?.textContent).toContain('equipe@exemplo.org')
-    expect(firstVisitVisitor?.querySelector('button')).toBeNull()
-    expect(screen.getByText(/não foi gravada no Supabase/)).toBeTruthy()
+    const recurring = screen.getByText(/Visitante Demonstração 03/).closest('article')
+    expect(recurring?.textContent).toContain('Não elegível · visita recorrente')
+    expect(screen.queryByRole('button', { name: /Registrar entrega de marca-página para Visitante Demonstração 03/ })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /Adicionar informação para Visitante Exemplo 02/ }))
+    fireEvent.change(screen.getByLabelText('Informação para a equipe'), { target: { value: 'Receber na porta principal.' } })
+    fireEvent.click(screen.getByRole('button', { name: /Salvar informação/ }))
+    expect(await screen.findByText(/Informação interna salva apenas na demonstração local/)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Adicionar informação para Visitante Exemplo 02/ }))
+    expect(screen.getByLabelText('Informação para a equipe')).toHaveProperty('value', 'Receber na porta principal.')
+    fireEvent.click(screen.getByRole('button', { name: /Fechar informações/ }))
+
+    fireEvent.click(screen.getByRole('button', { name: /Cadastrar Visitante/ }))
+    fireEvent.change(screen.getByLabelText('Nome completo'), { target: { value: 'Visitante de Teste 01' } })
+    fireEvent.change(screen.getByLabelText('WhatsApp / Telefone'), { target: { value: '(11) 99999-1000' } })
+    fireEvent.click(screen.getByRole('button', { name: /Cadastrar$/ }))
+    await screen.findByText('Visitante de Teste 01')
+    fireEvent.click(screen.getByRole('button', { name: /Registrar entrega de marca-página para Visitante de Teste 01/ }))
+
+    await waitFor(() => expect(screen.getByText(/Entrega do marca-página registrada somente nesta demonstração/)).toBeTruthy())
+    expect(screen.getAllByText('Entregue pela Recepção').length).toBeGreaterThan(1)
+    expect(screen.queryByRole('button', { name: /Registrar entrega de marca-página para Visitante de Teste 01/ })).toBeNull()
   })
 })

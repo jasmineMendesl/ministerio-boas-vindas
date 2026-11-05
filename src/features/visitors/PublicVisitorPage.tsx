@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Check, Heart, Leaf, LockKeyhole, Send } from 'lucide-react'
+import { Check, Gift, Heart, MessageSquareText, ShieldCheck, UserRound } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { supabase } from '../../lib/supabase'
 import { isValidPrayerRequest, isValidServiceDate, normalizeBrazilianPhone, normalizePrayerRequest, normalizeVisitorName } from '../../../supabase/functions/_shared/visitor-validation.ts'
@@ -76,33 +76,48 @@ export function PublicVisitorPage() {
     }
   }
 
-  return <main className="public-visitor min-h-screen bg-[#f7f7f2] text-[#243128]">
-    <div className="mx-auto grid min-h-screen max-w-[1200px] md:grid-cols-[.92fr_1.08fr]">
-      <section className="public-welcome relative flex min-h-[250px] flex-col justify-between overflow-hidden bg-[#293c30] px-6 pb-8 pt-7 text-white sm:px-10 sm:pt-9 md:min-h-screen md:px-14 md:pb-12 md:pt-10 lg:px-20">
-        <div className="welcome-orbit welcome-orbit-one"/><div className="welcome-orbit welcome-orbit-two"/>
-        <div className="relative flex items-center gap-3"><div className="grid size-10 place-items-center rounded-2xl bg-white/10 font-serif text-lg">B</div><div><p className="text-sm font-semibold tracking-wide">Ministério de</p><p className="text-[11px] text-white/60">Boas-Vindas</p></div></div>
-        <div className="relative mt-10 max-w-md md:mb-8 md:mt-0"><div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/20 px-3 py-1.5 text-[11px] text-white/75"><Leaf size={13}/> Um lugar para você</div><h1 className="font-serif text-4xl leading-[1.08] tracking-tight sm:text-5xl md:text-[54px]">Que bom ter<br/>você <em className="font-normal text-[#c7d7b2]">aqui.</em></h1><p className="mt-4 max-w-sm text-sm leading-6 text-white/65">Sua presença é muito especial. Queremos agradecer a visita e manter as portas abertas para você.</p></div>
-        <div className="relative hidden items-center gap-2 text-xs text-white/55 md:flex"><Heart size={14} className="text-[#c7d7b2]"/> Acolhimento, cuidado e pertencimento.</div>
-      </section>
-      <section className="flex items-start justify-center px-5 pb-10 pt-7 sm:px-10 md:items-center md:px-12 md:py-12 lg:px-20">
-        <div className="w-full max-w-[430px]">
-          <div className="mb-7"><p className="text-[11px] font-semibold uppercase tracking-[.17em] text-[#617b61]">Cadastro de visitante</p><h2 className="mt-2 text-[27px] font-semibold tracking-tight">Vamos manter contato?</h2><p className="mt-2 text-sm leading-6 text-[#788177]">Preencha seus dados. É rapidinho.</p></div>
-          {complete ? <div role="status" className="rounded-[24px] border border-[#e3e8dd] bg-white p-7 shadow-[0_18px_50px_rgba(35,48,36,.05)] sm:p-9"><div className="grid size-12 place-items-center rounded-2xl bg-[#edf3e9] text-[#425b46]"><Check size={23}/></div><h3 className="mt-5 text-xl font-semibold">Que bom receber você!</h3><p className="mt-2 text-sm leading-6 text-[#788177]">{thankYouMessage}</p></div> : <form onSubmit={handleSubmit} className="rounded-[24px] border border-[#e3e8dd] bg-white p-5 shadow-[0_18px_50px_rgba(35,48,36,.05)] sm:p-8">
-            <div className="space-y-5">
-              <label className="block text-sm font-medium">Seu nome<input className="form-input mt-2" type="text" name="name" autoComplete="name" maxLength={120} required value={name} onChange={event => setName(event.target.value)} placeholder="Como podemos chamar você?" /></label>
-              <label className="block text-sm font-medium">Telefone com DDD<input className="form-input mt-2" type="tel" name="phone" autoComplete="tel" inputMode="tel" maxLength={30} required value={phone} onChange={event => setPhone(event.target.value)} placeholder="(11) 99999-0000" /></label>
-              <label className="block text-sm font-medium">Dia em que você foi ao culto<input className="form-input mt-2" type="date" name="visitedOn" max={localDateInputValue()} required value={visitedOn} onChange={event => setVisitedOn(event.target.value)} /></label>
-              <label className="block text-sm font-medium">Deseja deixar um pedido de oração? <span className="font-normal text-muted">Opcional</span><textarea className="form-input form-textarea mt-2" name="prayerRequest" maxLength={2000} rows={4} value={prayerRequest} onChange={event => setPrayerRequest(event.target.value)} placeholder="Se quiser, escreva aqui seu pedido." /><span className="mt-1 block text-xs font-normal leading-5 text-muted">Esse pedido ficará acessível somente à equipe pastoral.</span></label>
-              <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-[#f6f7f3] p-3 text-sm"><input className="mt-1 size-4 shrink-0 accent-primary" type="checkbox" name="contactConsent" checked={contactConsent} onChange={event => setContactConsent(event.target.checked)} /><span><span className="font-medium">Aceito receber uma mensagem da equipe de Boas-Vindas.</span><span className="mt-1 block text-xs leading-5 text-muted">Opcional. Você pode enviar o cadastro sem autorizar o contato.</span></span></label>
-            </div>
-            <div className="visitor-honeypot" aria-hidden="true"><label>Website<input type="text" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={event => setWebsite(event.target.value)} /></label></div>
-            {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm leading-5 text-red-700">{error}</p>}
-            <Button type="submit" disabled={submitting} className="mt-6 w-full">{submitting ? 'Enviando…' : 'Enviar meu cadastro'}<Send size={15}/></Button>
-            <div className="mt-5 flex items-start gap-3 border-t border-[#edf0e9] pt-4"><LockKeyhole size={15} className="mt-0.5 shrink-0 text-[#657b61]"/><p className="text-xs leading-5 text-[#7b8379]">Seu nome e telefone serão usados para acolhimento. Só enviaremos mensagens se você autorizar. Pedidos de oração ficam restritos à equipe pastoral.</p></div>
-          </form>}
-          <p className="mt-5 text-center text-[11px] text-[#91978f]">Comunidade, cuidado e pertencimento.</p>
+  return <main className="public-visitor min-h-screen px-4 py-5 text-[#222820] sm:px-6 sm:py-8">
+    <div className="mx-auto w-full max-w-[470px]">
+      <header className="flex items-center justify-between gap-2">
+        <span className="inline-flex min-h-9 items-center rounded-full border border-[#e0e3dc] bg-white/75 px-4 text-[11px] font-semibold tracking-wide text-[#526b57] sm:text-xs">Ministério de Boas-Vindas</span>
+        <span className="inline-flex min-h-9 items-center gap-2 rounded-full bg-[#dff0df] px-3 text-[11px] font-medium text-[#58765e] sm:text-xs"><span className="size-1.5 rounded-full bg-[#85a78a]"/>Culto de Celebração</span>
+      </header>
+
+      <section className="pb-6 pt-6 text-center sm:pb-7 sm:pt-8">
+        <div className="relative mx-auto grid size-16 place-items-center rounded-[20px] border border-[#e8ece5] bg-white shadow-[0_8px_24px_rgba(41,61,44,.08)]">
+          <Heart className="fill-[#3d684f] text-[#3d684f]" size={27} strokeWidth={1.7}/>
+          <span className="absolute -bottom-1 -right-1 grid size-7 place-items-center rounded-full border-2 border-[#f8f8f5] bg-[#80572e] text-white"><Gift size={14}/></span>
         </div>
+        <h1 className="mx-auto mt-5 max-w-[410px] text-[25px] font-semibold leading-[1.2] tracking-[-.04em] text-[#242923] sm:text-[29px]">A paz do Senhor! Seja muito bem-vindo(a) à nossa casa!</h1>
+        <p className="mx-auto mt-3 max-w-[390px] text-sm leading-[1.65] text-[#697168] sm:text-[15px]">É um privilégio receber você em nosso culto. Queremos orar por você e te presentear com uma lembrança especial.</p>
       </section>
+
+      {complete ? <section role="status" className="rounded-[21px] border border-[#e8ebe5] bg-white p-6 text-center shadow-[0_12px_34px_rgba(44,55,44,.07)] sm:p-8"><span className="mx-auto grid size-14 place-items-center rounded-2xl bg-[#eaf2e8] text-[#3e684f]"><Check size={25}/></span><h2 className="mt-4 text-xl font-semibold">Que bom receber você!</h2><p className="mt-2 text-sm leading-6 text-[#697168]">{thankYouMessage}</p></section> : <form onSubmit={handleSubmit} className="rounded-[20px] border border-[#e7e9e2] bg-white p-5 shadow-[0_12px_34px_rgba(44,55,44,.07)] sm:p-6">
+        <div className="space-y-[17px]">
+          <label className="block text-sm font-semibold">Nome completo <span className="text-[#3d684f]">*</span>
+            <span className="relative mt-1.5 block"><UserRound size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#758177]"/><input className="form-input pl-11" type="text" name="name" autoComplete="name" maxLength={120} required value={name} onChange={event => setName(event.target.value)} placeholder="Como podemos te chamar?" /></span>
+          </label>
+          <label className="block text-sm font-semibold">WhatsApp / Telefone <span className="text-[#3d684f]">*</span>
+            <span className="relative mt-1.5 block"><MessageSquareText size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#758177]"/><input className="form-input pl-11" type="tel" name="phone" autoComplete="tel" inputMode="tel" maxLength={30} required value={phone} onChange={event => setPhone(event.target.value)} placeholder="(11) 90000-0000" /></span>
+          </label>
+          <label className="block text-sm font-semibold">Dia em que você foi ao culto <span className="text-[#3d684f]">*</span><input className="form-input mt-1.5" type="date" name="visitedOn" max={localDateInputValue()} required value={visitedOn} onChange={event => setVisitedOn(event.target.value)} /></label>
+          <label className="block text-sm font-semibold">Gostaria de um pedido de oração? <span className="font-normal text-[#899087]">(Opcional)</span>
+            <textarea className="form-input form-textarea mt-1.5 min-h-[88px] rounded-xl bg-[#f7f7f3] text-sm" name="prayerRequest" maxLength={2000} rows={3} value={prayerRequest} onChange={event => setPrayerRequest(event.target.value)} placeholder="Escreva aqui se deseja que nossa equipe pastoral interceda por você ou sua família..." />
+          </label>
+
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-xl bg-[#f7f7f3] px-3 py-2.5 text-xs leading-5 text-[#505950]"><input className="mt-1 size-4 shrink-0 accent-[#3d684f]" type="checkbox" name="contactConsent" checked={contactConsent} onChange={event => setContactConsent(event.target.checked)} /><span><span className="font-medium">Aceito receber uma mensagem da equipe de Boas-Vindas.</span><span className="block text-[#7b8379]">Opcional. Você pode concluir sem autorizar contato.</span></span></label>
+        </div>
+
+        <div className="visitor-honeypot" aria-hidden="true"><label>Website<input type="text" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={event => setWebsite(event.target.value)} /></label></div>
+        {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm leading-5 text-red-700">{error}</p>}
+        <Button type="submit" disabled={submitting} className="mt-5 min-h-[60px] w-full rounded-xl bg-[#3d684f] px-4 text-sm font-semibold leading-5 hover:bg-[#345941]">Concluir<Gift size={18}/></Button>
+      </form>}
+
+      <footer className="px-3 pb-2 pt-6 text-center">
+        <p className="flex items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-[.06em] text-[#7e877e]"><ShieldCheck size={14}/>Cuidado e privacidade</p>
+        <p className="mx-auto mt-2 max-w-[380px] text-xs leading-[1.55] text-[#737b71]">Seus dados são confidenciais e utilizados apenas pela nossa equipe de acolhimento pastoral para orar por você e entrar em contato com respeito.</p>
+        <div className="mt-5 border-t border-[#e9eae4] pt-4 text-[11px] text-[#899087]">ADLago · Ministério de Boas-Vindas</div>
+      </footer>
     </div>
   </main>
 }

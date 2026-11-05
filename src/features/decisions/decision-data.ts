@@ -19,6 +19,9 @@ export type DecisionRecord = {
   phoneNormalized: string
   type: DecisionType
   baptized: boolean
+  interestedInBaptism: boolean
+  acceptsMessages: boolean
+  welcomedBy: string
   decidedOn: string
   observations: string
   followUp: DecisionFollowUp
@@ -35,16 +38,16 @@ function day(now: Date, daysAgo: number) {
 
 export function createDemoDecisions(now = new Date()): DecisionRecord[] {
   const seeds: Array<Omit<DecisionRecord, 'followUp'> & { followUp: DecisionFollowUp }> = [
-    { id: 'demo-decision-01', personId: 'demo-person-01', personName: 'Visitante Exemplo 01', phoneNormalized: '+5511900000001', type: 'acceptance', baptized: false, decidedOn: day(now, 2), observations: 'Registro fictício para demonstração.', followUp: { id: 'demo-follow-01', status: 'awaiting_first_contact', contactDate: null, observations: '', contacts: [] } },
-    { id: 'demo-decision-02', personId: 'demo-decision-person-02', personName: 'Pessoa Demonstração 02', phoneNormalized: '+5511980000002', type: 'reconciliation', baptized: true, decidedOn: day(now, 7), observations: 'Registro fictício para demonstração.', followUp: { id: 'demo-follow-02', status: 'contact_made', contactDate: new Date(now.getTime() - 3 * 86400000).toISOString(), observations: 'Contato inicial de demonstração.', contacts: [{ id: 'demo-contact-02', contactedAt: new Date(now.getTime() - 3 * 86400000).toISOString(), observations: 'Contato inicial de demonstração.' }] } },
-    { id: 'demo-decision-03', personId: 'demo-decision-person-03', personName: 'Pessoa Demonstração 03', phoneNormalized: '+5511980000003', type: 'acceptance', baptized: true, decidedOn: day(now, 16), observations: '', followUp: { id: 'demo-follow-03', status: 'awaiting_first_contact', contactDate: null, observations: '', contacts: [] } },
-    { id: 'demo-decision-04', personId: 'demo-person-01', personName: 'Visitante Exemplo 01', phoneNormalized: '+5511900000001', type: 'reconciliation', baptized: false, decidedOn: day(now, 35), observations: 'Segunda decisão fictícia da mesma pessoa.', followUp: { id: 'demo-follow-04', status: 'contact_made', contactDate: new Date(now.getTime() - 32 * 86400000).toISOString(), observations: 'Contato registrado no exemplo.', contacts: [{ id: 'demo-contact-04', contactedAt: new Date(now.getTime() - 32 * 86400000).toISOString(), observations: 'Contato registrado no exemplo.' }] } },
+    { id: 'demo-decision-01', personId: 'demo-person-01', personName: 'Visitante Exemplo 01', phoneNormalized: '+5511900000001', type: 'acceptance', baptized: false, interestedInBaptism: true, acceptsMessages: true, welcomedBy: 'Equipe de demonstração', decidedOn: day(now, 2), observations: 'Registro fictício para demonstração.', followUp: { id: 'demo-follow-01', status: 'awaiting_first_contact', contactDate: null, observations: '', contacts: [] } },
+    { id: 'demo-decision-02', personId: 'demo-decision-person-02', personName: 'Pessoa Demonstração 02', phoneNormalized: '+5511980000002', type: 'reconciliation', baptized: true, interestedInBaptism: false, acceptsMessages: true, welcomedBy: 'Equipe de demonstração', decidedOn: day(now, 7), observations: 'Registro fictício para demonstração.', followUp: { id: 'demo-follow-02', status: 'contact_made', contactDate: new Date(now.getTime() - 3 * 86400000).toISOString(), observations: 'Contato inicial de demonstração.', contacts: [{ id: 'demo-contact-02', contactedAt: new Date(now.getTime() - 3 * 86400000).toISOString(), observations: 'Contato inicial de demonstração.' }] } },
+    { id: 'demo-decision-03', personId: 'demo-decision-person-03', personName: 'Pessoa Demonstração 03', phoneNormalized: '+5511980000003', type: 'acceptance', baptized: true, interestedInBaptism: false, acceptsMessages: false, welcomedBy: 'Equipe de demonstração', decidedOn: day(now, 16), observations: '', followUp: { id: 'demo-follow-03', status: 'awaiting_first_contact', contactDate: null, observations: '', contacts: [] } },
+    { id: 'demo-decision-04', personId: 'demo-person-01', personName: 'Visitante Exemplo 01', phoneNormalized: '+5511900000001', type: 'reconciliation', baptized: false, interestedInBaptism: true, acceptsMessages: true, welcomedBy: 'Equipe de demonstração', decidedOn: day(now, 35), observations: 'Segunda decisão fictícia da mesma pessoa.', followUp: { id: 'demo-follow-04', status: 'contact_made', contactDate: new Date(now.getTime() - 32 * 86400000).toISOString(), observations: 'Contato registrado no exemplo.', contacts: [{ id: 'demo-contact-04', contactedAt: new Date(now.getTime() - 32 * 86400000).toISOString(), observations: 'Contato registrado no exemplo.' }] } },
   ]
   return seeds
 }
 
 export function addDecision(records: DecisionRecord[], input: {
-  fullName: string; phone: string; type: DecisionType; baptized: boolean; decidedOn: string; observations: string
+  fullName: string; phone: string; type: DecisionType; baptized: boolean; interestedInBaptism: boolean; acceptsMessages: boolean; decidedOn: string; observations: string
 }, now = new Date(), makeId = () => globalThis.crypto?.randomUUID?.() ?? `demo-${Date.now()}-${Math.random().toString(16).slice(2)}`, knownPeople: VisitorPerson[] = []) {
   const personName = normalizeVisitorName(input.fullName)
   const phoneNormalized = normalizeBrazilianPhone(input.phone)
@@ -58,7 +61,7 @@ export function addDecision(records: DecisionRecord[], input: {
   const existingPersonName = existingDecisionPerson?.personName ?? existingVisitorPerson?.fullName
   const personId = existingDecisionPerson?.personId ?? existingVisitorPerson?.id ?? makeId()
   const record: DecisionRecord = {
-    id: makeId(), personId, personName: existingPersonName ?? personName, phoneNormalized, type: input.type, baptized: input.baptized,
+    id: makeId(), personId, personName: existingPersonName ?? personName, phoneNormalized, type: input.type, baptized: input.baptized, interestedInBaptism: input.interestedInBaptism, acceptsMessages: input.acceptsMessages, welcomedBy: 'Equipe de demonstração',
     decidedOn: input.decidedOn, observations: input.observations.trim(),
     followUp: { id: makeId(), status: 'awaiting_first_contact', contactDate: null, observations: '', contacts: [] },
   }

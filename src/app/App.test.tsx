@@ -45,7 +45,7 @@ describe('rotas e autenticação da equipe', () => {
     await user.click(screen.getAllByRole('link', { name: 'Dashboard' })[0])
     expect(screen.getByRole('heading', { name: 'Bom dia, equipe' })).toBeTruthy()
     await user.click(screen.getAllByRole('link', { name: 'Decisões' })[0])
-    expect(screen.getByRole('heading', { name: 'Aceitações / Reconciliações' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Decisões de Fé e Vidas Transformadas' })).toBeTruthy()
     await user.click(screen.getAllByRole('link', { name: 'Pertencer' })[0])
     expect(screen.getByRole('heading', { name: 'Projeto Pertencer' })).toBeTruthy()
   })
@@ -60,22 +60,24 @@ describe('rotas e autenticação da equipe', () => {
     expect(screen.getByRole('alert').textContent).toContain('Confira seu e-mail e sua senha')
   })
 
-  it('mantém o formulário público acessível sem sessão e envia os campos adicionais do cadastro', async () => {
+  it('mantém o formulário público acessível sem sessão, mantém a data do culto e envia os campos do cadastro', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={['/visitante']}><App /></MemoryRouter>)
-    expect(screen.getByRole('heading', { name: 'Vamos manter contato?' })).toBeTruthy()
-    expect(screen.getByLabelText('Seu nome')).toBeTruthy()
-    expect(screen.getByLabelText('Telefone com DDD')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /A paz do Senhor!/ })).toBeTruthy()
+    expect(screen.getByLabelText(/Nome completo/)).toBeTruthy()
+    expect(screen.getByLabelText(/WhatsApp \/ Telefone/)).toBeTruthy()
+    expect(screen.queryByText(/primeira vez conosco/i)).toBeNull()
     expect(screen.getByLabelText(/Dia em que você foi ao culto/)).toBeTruthy()
-    expect(screen.getByLabelText(/Deseja deixar um pedido de oração/)).toBeTruthy()
+    expect(screen.getByLabelText(/Gostaria de um pedido de oração/)).toBeTruthy()
     expect(screen.getByRole('checkbox', { name: /Aceito receber uma mensagem/ })).toBeTruthy()
     expect(screen.queryByLabelText('E-mail')).toBeNull()
     expect(screen.queryByLabelText('Senha')).toBeNull()
-    await user.type(screen.getByLabelText('Seu nome'), 'Marina Exemplo')
-    await user.type(screen.getByLabelText('Telefone com DDD'), '11987654321')
-    await user.type(screen.getByLabelText(/Deseja deixar um pedido de oração/), 'Ore por nossa família.')
+    await user.type(screen.getByLabelText(/Nome completo/), 'Marina Exemplo')
+    await user.type(screen.getByLabelText(/WhatsApp \/ Telefone/), '11987654321')
+    await user.type(screen.getByLabelText(/Gostaria de um pedido de oração/), 'Ore por nossa família.')
     await user.click(screen.getByRole('checkbox', { name: /Aceito receber uma mensagem/ }))
-    await user.click(screen.getByRole('button', { name: 'Enviar meu cadastro' }))
+    expect(screen.getByRole('button', { name: 'Concluir' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Concluir' }))
     await waitFor(() => expect(authMocks.invokeVisitorFunction).toHaveBeenCalledWith(
       'public-visitor-register',
       expect.objectContaining({ body: expect.objectContaining({
