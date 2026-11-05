@@ -1,0 +1,4 @@
+project_id = "projeto-pertencer"
+
+[functions.public-visitor-register]
+verify_jwt = false
