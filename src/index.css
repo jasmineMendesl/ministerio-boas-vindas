@@ -14,7 +14,6 @@
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; }
 button, input { font: inherit; }
-.brand-mark { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 15px; background: #425b46; color: white; font-family: Georgia, serif; font-size: 20px; }
 .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 20; width: 264px; flex-direction: column; border-right: 1px solid #e7e9e2; background: #fff; padding: 26px 18px 18px; }
 .nav-link { display: flex; min-height: 44px; align-items: center; gap: 12px; border-radius: 12px; padding: 0 12px; color: #737b70; font-size: 13px; font-weight: 500; transition: .18s ease; }
 .nav-link:hover { background: #f6f7f3; color: #303a30; }
