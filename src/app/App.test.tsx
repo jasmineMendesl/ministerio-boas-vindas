@@ -11,7 +11,7 @@ const authMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('./AuthProvider', () => ({
-  useAuth: () => ({ session: authMocks.session, loading: false }),
+  useAuth: () => ({ session: authMocks.session, role: 'admin', loading: false }),
 }))
 
 vi.mock('../lib/supabase', () => ({
@@ -63,18 +63,18 @@ describe('rotas e autenticação da equipe', () => {
   it('mantém o formulário público acessível sem sessão, mantém a data do culto e envia os campos do cadastro', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={['/visitante']}><App /></MemoryRouter>)
-    expect(screen.getByRole('heading', { name: /A paz do Senhor!/ })).toBeTruthy()
-    expect(screen.getByLabelText(/Nome completo/)).toBeTruthy()
-    expect(screen.getByLabelText(/WhatsApp \/ Telefone/)).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /Que bom ter voc/  })).toBeTruthy()
+    expect(screen.getByLabelText(/Seu nome/)).toBeTruthy()
+    expect(screen.getByLabelText(/Telefone com DDD/)).toBeTruthy()
     expect(screen.queryByText(/primeira vez conosco/i)).toBeNull()
-    expect(screen.getByLabelText(/Dia em que você foi ao culto/)).toBeTruthy()
-    expect(screen.getByLabelText(/Gostaria de um pedido de oração/)).toBeTruthy()
+    expect(screen.getByLabelText(/Dia em que/)).toBeTruthy()
+    expect(screen.getByLabelText(/Deseja deixar um pedido/)).toBeTruthy()
     expect(screen.getByRole('checkbox', { name: /Aceito receber uma mensagem/ })).toBeTruthy()
     expect(screen.queryByLabelText('E-mail')).toBeNull()
     expect(screen.queryByLabelText('Senha')).toBeNull()
-    await user.type(screen.getByLabelText(/Nome completo/), 'Marina Exemplo')
-    await user.type(screen.getByLabelText(/WhatsApp \/ Telefone/), '11987654321')
-    await user.type(screen.getByLabelText(/Gostaria de um pedido de oração/), 'Ore por nossa família.')
+    await user.type(screen.getByLabelText(/Seu nome/), 'Marina Exemplo')
+    await user.type(screen.getByLabelText(/Telefone com DDD/), '11987654321')
+    await user.type(screen.getByLabelText(/Deseja deixar um pedido/), 'Ore por nossa família.')
     await user.click(screen.getByRole('checkbox', { name: /Aceito receber uma mensagem/ }))
     expect(screen.getByRole('button', { name: 'Concluir' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Concluir' }))

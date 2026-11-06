@@ -35,3 +35,9 @@ Faça deploy de `public-visitor-register` com `npm run functions:deploy:visitor`
 Configure `VISITOR_ALLOWED_ORIGINS` com as origens exatas do app (localhost e domínio Vercel) e `VISITOR_IP_HASH_SECRET` com um segredo aleatório de pelo menos 32 caracteres, usando o painel de secrets da Edge Function ou `npx supabase secrets set`. Não salve esse segredo em arquivos versionados. A função combina honeypot, tempo mínimo de preenchimento, limite de 30 solicitações por IP por hora e HMAC do IP; o endereço IP bruto não é armazenado.
 
 O runtime Supabase disponibiliza as chaves administrativas para Edge Functions. Nunca copie uma secret/service-role key para `.env.local`, variáveis `VITE_*`, código cliente ou GitHub.
+
+## Perfis e permissoes
+
+A migration 202611050003_two_role_access_model.sql substitui os perfis por apenas admin e team. Ela converte perfis existentes pastoral para team (sem elevar privilegios) e atualiza as politicas RLS. Admin pode gerenciar perfis e todos os registros. Team pode operar visitantes, decisoes e acompanhamentos, mas tem somente leitura em eventos e convites do Projeto Pertencer. O Dashboard e uma tela de consulta; nao possui operacoes de escrita. O frontend consulta o proprio perfil ativo e bloqueia contas sem role valido, enquanto RLS continua sendo a protecao efetiva no banco.
+
+A migration 202611050004_visitor_service_gift_reports.sql cria o fechamento por culto: data, identificacao do culto, quantidade de mimos e usuario responsavel. Ela e separada das entregas individuais em gift_deliveries. Admin gerencia todos os fechamentos; team consulta e pode registrar/editar os proprios, sem excluir. Aplicar depois da migration de perfis de duas funcoes.

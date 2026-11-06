@@ -4,7 +4,7 @@ import { AppLayout } from '../components/AppLayout'
 import { SignInPage } from '../features/auth/SignInPage'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { VisitorsPage } from '../features/visitors/VisitorsPage'
-import { DecisionsPage } from '../features/decisions/DecisionsPage'
+import { DecisionRegistrationPage, DecisionsModule, DecisionsPage } from '../features/decisions/DecisionsPage'
 import { PertencerPage } from '../features/pertencer/PertencerPage'
 import { PublicVisitorPage } from '../features/visitors/PublicVisitorPage'
 
@@ -17,7 +17,10 @@ export function App() {
         <Route element={<AppLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="/visitantes" element={<VisitorsPage />} />
-          <Route path="/decisoes" element={<DecisionsPage />} />
+          <Route path="/decisoes" element={<DecisionsModule />}>
+            <Route index element={<DecisionsPage />} />
+            <Route path="nova" element={<DecisionRegistrationPage />} />
+          </Route>
           <Route path="/pertencer" element={<PertencerPage />} />
         </Route>
       </Route>

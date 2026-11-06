@@ -2,25 +2,38 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 
-type AuthContextValue = { session: Session | null; loading: boolean }
-const AuthContext = createContext<AuthContextValue>({ session: null, loading: true })
+export type AppRole = 'admin' | 'team'
+type AuthContextValue = { session: Session | null; role: AppRole | null; loading: boolean }
+const AuthContext = createContext<AuthContextValue>({ session: null, role: null, loading: true })
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
+  const [role, setRole] = useState<AppRole | null>(null)
   const [loading, setLoading] = useState(Boolean(supabase))
 
   useEffect(() => {
     if (!supabase) return
     let active = true
-    supabase.auth.getSession().then(({ data }) => {
+    async function updateProfile(nextSession: Session | null) {
+      if (!nextSession) {
+        if (active) setRole(null)
+        return
+      }
+      const { data, error } = await supabase!.from('profiles').select('role, active').eq('id', nextSession.user.id).maybeSingle()
+      if (!active) return
+      setRole(!error && data?.active && (data.role === 'admin' || data.role === 'team') ? data.role : null)
+    }
+    supabase.auth.getSession().then(async ({ data }) => {
       if (active) {
         setSession(data.session)
+        await updateProfile(data.session)
         setLoading(false)
       }
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession)
-      setLoading(false)
+      setLoading(true)
+      void updateProfile(nextSession).finally(() => { if (active) setLoading(false) })
     })
     return () => {
       active = false
@@ -28,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const value = useMemo(() => ({ session, loading }), [session, loading])
+  const value = useMemo(() => ({ session, role, loading }), [session, role, loading])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
