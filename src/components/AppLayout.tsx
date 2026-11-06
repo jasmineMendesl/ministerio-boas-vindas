@@ -33,7 +33,7 @@ export function AppLayout() {
     <div className="md:pl-[264px]">
       <header className="topbar"><div className="flex items-center gap-3 md:hidden"><div className="brand-mark size-9 text-sm">B</div><span className="font-semibold">Ministério de Boas-Vindas</span></div><div className="hidden md:block"><p className="text-xs text-muted">MINISTÉRIO DE BOAS-VINDAS</p><p className="text-sm font-medium">Acolhimento com cuidado e propósito</p></div><div className="ml-auto hidden items-center gap-2 sm:flex"><span className="size-2 rounded-full bg-emerald-500"/><span className="text-xs text-muted">Área da equipe</span></div><Button className="ml-auto md:hidden" variant="ghost" size="icon" aria-label="Sair" onClick={signOut}><LogOut size={17}/></Button></header>
       <main className="mx-auto max-w-[1320px] px-4 pb-28 pt-7 sm:px-7 md:px-10 md:pb-12 md:pt-9"><Outlet/></main>
-      <nav className="bottom-nav md:hidden">{links.map(({ to, short, label, icon: Icon, end }) => <NavLink key={to} to={to} end={end} className={({ isActive }) => `bottom-link ${isActive ? 'bottom-link-active' : ''}`}><Icon size={19} strokeWidth={1.9}/><span>{short ?? label}</span></NavLink>)}</nav>
+      <nav aria-label="Menu inferior" className="bottom-nav md:hidden">{links.map(({ to, short, label, icon: Icon, end }) => <NavLink key={to} to={to} end={end} className={({ isActive }) => `bottom-link ${isActive ? 'bottom-link-active' : ''}`}><Icon size={19} strokeWidth={1.9}/><span>{short ?? label}</span></NavLink>)}</nav>
     </div>
   </div>
 }
