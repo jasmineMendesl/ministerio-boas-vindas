@@ -7,6 +7,7 @@ export type VisitorVisit = {
   registeredAt: string
   source: VisitSource
   serviceLabel: string
+  visitedOn?: string
 }
 
 export type GiftDelivery = {
@@ -123,14 +124,15 @@ export function addManualVisit(
 
 export function firstVisit(person: VisitorPerson): string | null {
   return person.visits.reduce<string | null>((first, visit) => {
-    if (!first || new Date(visit.registeredAt).getTime() < new Date(first).getTime()) return visit.registeredAt
+    const visitDate = visit.visitedOn ?? visit.registeredAt
+    if (!first || new Date(visitDate).getTime() < new Date(first).getTime()) return visitDate
     return first
   }, null)
 }
 
 export function visitorHasVisitInPeriod(person: VisitorPerson, month: number, year: number): boolean {
-  return person.visits.some(({ registeredAt }) => {
-    const date = new Date(registeredAt)
+  return person.visits.some(({ registeredAt, visitedOn }) => {
+    const date = new Date(visitedOn ? `${visitedOn}T12:00:00` : registeredAt)
     return (month === 0 || date.getMonth() + 1 === month) && (year === 0 || date.getFullYear() === year)
   })
 }
@@ -140,8 +142,8 @@ export function filterVisitors(people: VisitorPerson[], query: string, month: nu
   const digits = query.replace(/\D/g, '')
 
   return people.filter(person => {
-    const hasMatchingVisit = person.visits.some(({ registeredAt, serviceLabel: visitService }) => {
-      const date = new Date(registeredAt)
+    const hasMatchingVisit = person.visits.some(({ registeredAt, visitedOn, serviceLabel: visitService }) => {
+      const date = new Date(visitedOn ? `${visitedOn}T12:00:00` : registeredAt)
       return (month === 0 || date.getMonth() + 1 === month)
         && (year === 0 || date.getFullYear() === year)
         && (!serviceLabel || visitService === serviceLabel)

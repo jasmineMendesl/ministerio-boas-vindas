@@ -27,6 +27,8 @@ describe('módulo de decisões em demonstração', () => {
     expect(screen.queryByRole('button', { name: /Registrar contato/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /Hist.rico/ })).toBeNull()
     expect(screen.getAllByRole('link', { name: /Abrir conversa no WhatsApp/ }).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Aguardando primeiro contato/)[0].classList.contains('status-pending')).toBe(true)
+    expect(screen.getAllByText('Contato realizado').some(node => node.classList.contains('status-positive'))).toBe(true)
   })
 
   it('adiciona outra decisão ao histórico da pessoa e cria a pendência inicial', async () => {

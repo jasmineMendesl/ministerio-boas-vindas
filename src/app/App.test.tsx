@@ -52,6 +52,9 @@ describe('rotas e autenticação da equipe', () => {
     expect(sidebar.classList.contains('sidebar')).toBe(true)
     expect(within(sidebar).getByRole('link', { name: 'Acolher Visitante' })).toBeTruthy()
     expect(within(sidebar).getByRole('navigation', { name: 'Menu principal' }).querySelectorAll('a')).toHaveLength(4)
+    expect(screen.getAllByText('Confirmado').some(node => node.classList.contains('status-positive'))).toBe(true)
+    expect(screen.getAllByText('Ausente justificado').some(node => node.classList.contains('status-negative'))).toBe(true)
+    expect(screen.getAllByText('Aguardando resposta').some(node => node.classList.contains('status-pending'))).toBe(true)
   })
 
   it('envia credenciais ao Supabase e mostra uma mensagem genérica em caso de falha', async () => {

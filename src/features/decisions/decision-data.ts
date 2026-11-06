@@ -2,7 +2,7 @@ import { normalizeBrazilianPhone, normalizeVisitorName } from '../../../supabase
 import type { VisitorPerson } from '../visitors/visitor-data'
 
 export type DecisionType = 'acceptance' | 'reconciliation'
-export type FollowUpStatus = 'awaiting_first_contact' | 'contact_made' | 'awaiting_response' | 'responded' | 'unable_to_contact'
+export type FollowUpStatus = 'awaiting_first_contact' | 'contact_made' | 'awaiting_response' | 'responded' | 'invited' | 'awaiting_confirmation' | 'confirmed' | 'attended' | 'no_show' | 'declined' | 'unable_to_contact'
 
 export type ContactEntry = { id: string; contactedAt: string; observations: string }
 export type DecisionFollowUp = {

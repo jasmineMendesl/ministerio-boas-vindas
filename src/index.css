@@ -28,6 +28,10 @@ button, input { font: inherit; }
 @media (min-width: 768px) { .bottom-nav { display: none; } }
 .bottom-link { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 4px; border-radius: 10px; padding: 6px 2px; color: #75675D; font-size: 10px; font-weight: 500; }
 .bottom-link-active { color: #6F4F28; }
+.status-positive { border-color: #C6E4CA; background-color: #E7F4E8; color: #2F6B3A; }
+.status-negative { border-color: #F3C7C7; background-color: #FCE8E8; color: #A53737; }
+.status-pending { border-color: #F3D4A5; background-color: #FFF1DB; color: #9A5D0A; }
+.status-neutral { border-color: #DDD9D2; background-color: #F1F0ED; color: #5C5147; }
 .panel { border: 1px solid #E8DED4; border-radius: 22px; background: white; box-shadow: 0 10px 30px rgb(60 42 28 / .04); }
 .empty-panel { display: flex; min-height: 350px; flex-direction: column; align-items: center; justify-content: center; border: 1px dashed #E8DED4; border-radius: 24px; background: linear-gradient(145deg, #fff, #FBF8F4); padding: 32px 24px; text-align: center; }
 .empty-icon { display: grid; width: 56px; height: 56px; place-items: center; border-radius: 19px; background: #F3E9DF; color: #6F4F28; }
