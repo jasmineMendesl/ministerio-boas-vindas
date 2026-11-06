@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 
@@ -48,6 +48,10 @@ describe('rotas e autenticação da equipe', () => {
     expect(screen.getByRole('heading', { name: 'Decisões de Fé e Vidas Transformadas' })).toBeTruthy()
     await user.click(screen.getAllByRole('link', { name: 'Pertencer' })[0])
     expect(screen.getByRole('heading', { name: 'Projeto Pertencer' })).toBeTruthy()
+    const sidebar = screen.getByRole('complementary')
+    expect(sidebar.classList.contains('sidebar')).toBe(true)
+    expect(within(sidebar).getByRole('link', { name: 'Acolher Visitante' })).toBeTruthy()
+    expect(within(sidebar).getByRole('navigation', { name: 'Menu principal' }).querySelectorAll('a')).toHaveLength(4)
   })
 
   it('envia credenciais ao Supabase e mostra uma mensagem genérica em caso de falha', async () => {

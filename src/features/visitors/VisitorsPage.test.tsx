@@ -27,7 +27,8 @@ describe('Visitors screen', () => {
     expect(screen.getByRole('heading', { name: 'Fechamento de mimos por culto' })).toBeTruthy()
     expect(screen.getAllByText(/Demonstra/).length).toBeGreaterThan(0)
     expect(await screen.findByRole('img', { name: /QR Code do formul/ })).toBeTruthy()
-    expect(screen.getByRole('link', { name: /Testar formul/ }).getAttribute('href')).toContain('/visitante')
+    expect(screen.getByRole('link', { name: /Abrir formulário/ }).getAttribute('href')).toContain('/visitante')
+    expect(screen.queryByText(/Material de recepção e acolhimento|Instruções para Voluntários|Baixar PDF/)).toBeNull()
   })
 
   it('shows the fictional prayer request in visitor details', () => {
