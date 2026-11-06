@@ -5,16 +5,19 @@ import { supabase } from '../../lib/supabase'
 
 type Stats = { visitorsThisMonth: number; decisionsThisMonth: number; awaitingContact: number; invitations: number; nextEvent: string }
 const emptyStats: Stats = { visitorsThisMonth: 0, decisionsThisMonth: 0, awaitingContact: 0, invitations: 0, nextEvent: '' }
+const scheduleRoleNames: Record<string, string> = { leader: 'Líder', support: 'Apoio', confession_prayer: 'Oração de Confissão', reconciliation_word: 'Palavra de reconciliação', seat_direction: 'Direcionar os irmãos para os lugares vagos', opening_prayer: 'Oração Inicial', closing_prayer: 'Oração Final' }
 
 function SummaryCard({ icon: Icon, title, value, subtitle }: { icon: typeof UsersRound; title: string; value: number | string; subtitle: string }) {
-  return <article className="rounded-2xl border border-[#E8DED4] bg-white p-4 shadow-[0_3px_12px_rgba(43,58,45,.035)]"><span className="grid size-9 place-items-center rounded-lg bg-[#F3E9DF] text-[#6F4F28]"><Icon size={18}/></span><p className="mt-3 text-xs text-[#75675D]">{title}</p><p className="mt-1 text-2xl font-semibold tracking-tight">{value}</p><p className="mt-1 text-xs text-[#75675D]">{subtitle}</p></article>
+  return <article className="rounded-2xl border border-[#E5DDCF] bg-white p-4 shadow-[0_3px_12px_rgba(0,0,0,.035)]"><span className="grid size-9 place-items-center rounded-lg bg-[#F0E6D2] text-[#8A6729]"><Icon size={18}/></span><p className="mt-3 text-xs text-[#68645C]">{title}</p><p className="mt-1 text-2xl font-semibold tracking-tight">{value}</p><p className="mt-1 text-xs text-[#68645C]">{subtitle}</p></article>
 }
 
 export function DashboardPage() {
-  const { session } = useAuth()
+  const { session, displayName } = useAuth()
   const [stats, setStats] = useState(emptyStats)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [personalAssignments, setPersonalAssignments] = useState<{ date: string; service: string; roles: string[] }[]>([])
+  const [personalScheduleError, setPersonalScheduleError] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -32,6 +35,22 @@ export function DashboardPage() {
         supabase.from('pertencer_events').select('id,event_date').gte('event_date', today).order('event_date', { ascending: true }).limit(1),
       ])
       if (!active) return
+      const assignmentsResult = await supabase.from('ministry_schedule_assignments').select('schedule_id,ministry_role').eq('volunteer_profile_id', session.user.id)
+      if (assignmentsResult.error) setPersonalScheduleError(true)
+      else {
+        setPersonalScheduleError(false)
+        const assignments = assignmentsResult.data ?? []
+        const scheduleIds = [...new Set(assignments.map(item => item.schedule_id))]
+        if (scheduleIds.length) {
+          const scheduleResult = await supabase.from('ministry_schedules').select('id,service_date,service_label').in('id', scheduleIds).gte('service_date', today).order('service_date')
+          if (scheduleResult.error) { setPersonalScheduleError(true); setPersonalAssignments([]) }
+          else {
+            const firstDate = scheduleResult.data?.[0]?.service_date
+            const firstSchedule = scheduleResult.data?.[0]
+            setPersonalAssignments(firstSchedule ? [{ date: firstDate!, service: firstSchedule.service_label, roles: assignments.filter(item => item.schedule_id === firstSchedule.id).map(item => item.ministry_role) }] : [])
+          }
+        } else setPersonalAssignments([])
+      }
       const failed = visitors.error || decisions.error || followUps.error || event.error
       if (failed) { setError('Não foi possível carregar todos os indicadores. Verifique a conexão e as permissões.'); setStats(emptyStats) }
       else {
@@ -51,16 +70,17 @@ export function DashboardPage() {
     return () => { active = false }
   }, [session?.user.id])
 
-  return <div className="animate-in space-y-5 text-[#2B2118]">
-    <header className="rounded-2xl border border-[#E8DED4] bg-[linear-gradient(110deg,#fff_0%,#fff_72%,#F3E9DF_100%)] p-5 sm:p-7"><span className="inline-flex items-center gap-2 rounded-full bg-[#F3E9DF] px-3 py-1.5 text-xs font-semibold text-[#6F4F28]"><ChartNoAxesCombined size={14}/>VISÃO GERAL · DADOS DO SUPABASE</span><h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Bom dia, equipe</h1><p className="mt-1 text-sm text-[#75675D]">Acolhimento e acompanhamento da comunidade.</p></header>
+  return <div className="animate-in space-y-5 text-[#161616]">
+    <header className="rounded-2xl border border-[#E5DDCF] bg-[linear-gradient(110deg,#fff_0%,#fff_72%,#F0E6D2_100%)] p-5 sm:p-7"><span className="inline-flex items-center gap-2 rounded-full bg-[#F0E6D2] px-3 py-1.5 text-xs font-semibold text-[#8A6729]"><ChartNoAxesCombined size={14}/>VISÃO GERAL · DADOS DO SUPABASE</span><h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Bom dia, {displayName ?? 'equipe'}</h1><p className="mt-1 text-sm text-[#68645C]">Acolhimento e acompanhamento da comunidade.</p></header>
+    <section aria-label="Minha próxima escala" className="rounded-2xl border border-[#D9CCB2] bg-[linear-gradient(110deg,#fff_0%,#FBF9F4_55%,#F0E6D2_100%)] p-4 shadow-[0_3px_12px_rgba(0,0,0,.035)] sm:p-5"><div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#8A6729] text-white"><CalendarDays size={19}/></span><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-[#8A6729]">Minha próxima escala</p>{personalScheduleError ? <p className="mt-1 text-sm text-[#68645C]">A escala estará disponível após a configuração do banco de dados.</p> : personalAssignments.length ? <><p className="mt-1 font-semibold capitalize">{new Date(`${personalAssignments[0].date}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })} · {personalAssignments[0].service}</p><div className="mt-2 flex flex-wrap gap-2">{personalAssignments[0].roles.map((assignedRole, index) => <span key={`${assignedRole}-${index}`} className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[#34322E]">{scheduleRoleNames[assignedRole] ?? assignedRole}</span>)}</div></> : <p className="mt-1 text-sm text-[#68645C]">Você ainda não está escalado para um próximo culto.</p>}</div></div></section>
     {error && <p role="alert" className="status-pending rounded-lg border px-3 py-2 text-sm">{error}</p>}
-    {loading && <p role="status" className="text-xs text-[#75675D]">Carregando indicadores…</p>}
+    {loading && <p role="status" className="text-xs text-[#68645C]">Carregando indicadores…</p>}
     <section aria-label="Indicadores do ministério" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <SummaryCard icon={UsersRound} title="Visitas neste mês" value={stats.visitorsThisMonth} subtitle="Registros de culto"/>
       <SummaryCard icon={HeartHandshake} title="Decisões neste mês" value={stats.decisionsThisMonth} subtitle="Aceitações e reconciliações"/>
       <SummaryCard icon={CalendarDays} title="Aguardando primeiro contato" value={stats.awaitingContact} subtitle="Pendências de acompanhamento"/>
       <SummaryCard icon={Coffee} title="Convidados na próxima edição" value={stats.invitations} subtitle={stats.nextEvent ? `Edição em ${new Date(`${stats.nextEvent}T12:00:00`).toLocaleDateString('pt-BR')}` : 'Nenhuma edição futura cadastrada'}/>
     </section>
-    {!loading && !error && <p className="text-xs text-[#75675D]">Indicadores consultados com sua conta e filtrados pelas permissões do perfil.</p>}
+    {!loading && !error && <p className="text-xs text-[#68645C]">Indicadores consultados com sua conta e filtrados pelas permissões do perfil.</p>}
   </div>
 }

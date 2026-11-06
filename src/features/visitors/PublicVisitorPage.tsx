@@ -53,8 +53,8 @@ export function PublicVisitorPage() {
     }
   }
 
-  return <main className="visitor-page min-h-screen text-[#2B2118]">
-    <header className="visitor-hero relative isolate overflow-hidden bg-[#6F4F28] text-white">
+  return <main className="visitor-page min-h-screen text-[#161616]">
+    <header className="visitor-hero relative isolate overflow-hidden bg-[#8A6729] text-white">
       <span aria-hidden="true" className="welcome-orbit welcome-orbit-one" />
       <span aria-hidden="true" className="welcome-orbit welcome-orbit-two" />
       <div className="relative mx-auto max-w-[1080px] px-[22px] pb-8 pt-7 sm:px-8 sm:pb-12 sm:pt-9 lg:px-12 lg:pb-14">
@@ -64,7 +64,7 @@ export function PublicVisitorPage() {
         </div>
         <div className="mt-9 max-w-[550px] sm:mt-12">
           <span className="inline-flex h-[31px] items-center gap-2 rounded-full border border-white/20 px-3 text-[12px] text-white/90"><Leaf size={14} strokeWidth={1.7}/>Um lugar para você</span>
-          <h1 className="mt-4 font-serif text-[37px] leading-[1.04] tracking-[-.04em] sm:text-[48px]">Que bom ter<br className="hidden sm:block"/> você <em className="text-[#C0977D]">aqui.</em></h1>
+          <h1 className="mt-4 font-serif text-[37px] leading-[1.04] tracking-[-.04em] sm:text-[48px]">Que bom ter<br className="hidden sm:block"/> você <em className="text-[#D8C79D]">aqui.</em></h1>
           <p className="mt-4 max-w-[430px] text-[14px] leading-[1.7] text-white/80 sm:text-[15px]">Sua presença é muito especial. Queremos agradecer a visita e manter as portas abertas para você.</p>
         </div>
       </div>
@@ -73,28 +73,28 @@ export function PublicVisitorPage() {
     <section className="visitor-form-section px-[18px] pb-10 pt-7 sm:px-6 sm:pb-14 sm:pt-9">
       <div className="mx-auto max-w-[1080px]">
         <div className="mb-6 sm:mb-7">
-          <p className="text-[11px] font-medium uppercase tracking-[.18em] text-[#6F4F28]">Cadastro de visitante</p>
+          <p className="text-[11px] font-medium uppercase tracking-[.18em] text-[#8A6729]">Cadastro de visitante</p>
           <h2 className="mt-3 text-[25px] font-semibold tracking-[-.04em] sm:text-[29px]">Vamos manter contato?</h2>
-          <p className="mt-2 text-[13px] text-[#75675D] sm:text-sm">Preencha seus dados. É rapidinho.</p>
+          <p className="mt-2 text-[13px] text-[#68645C] sm:text-sm">Preencha seus dados. É rapidinho.</p>
         </div>
 
-        {complete ? <section role="status" className="visitor-form-card max-w-[700px] rounded-[22px] border border-[#E8DED4] bg-white p-6 text-center shadow-[0_10px_32px_rgba(35,47,34,.05)] sm:p-9"><span className="status-positive mx-auto grid size-14 place-items-center rounded-full"><Check size={25}/></span><h3 className="mt-4 text-xl font-semibold">Que bom receber você!</h3><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#75675D]">{thankYouMessage}</p></section> : <form onSubmit={handleSubmit} className="visitor-form-card max-w-[700px] rounded-[22px] border border-[#E8DED4] bg-white p-[19px] shadow-[0_10px_32px_rgba(35,47,34,.05)] sm:p-7">
+        {complete ? <section role="status" className="visitor-form-card max-w-[700px] rounded-[22px] border border-[#E5DDCF] bg-white p-6 text-center shadow-[0_10px_32px_rgba(0,0,0,.05)] sm:p-9"><span className="status-positive mx-auto grid size-14 place-items-center rounded-full"><Check size={25}/></span><h3 className="mt-4 text-xl font-semibold">Que bom receber você!</h3><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#68645C]">{thankYouMessage}</p></section> : <form onSubmit={handleSubmit} className="visitor-form-card max-w-[700px] rounded-[22px] border border-[#E5DDCF] bg-white p-[19px] shadow-[0_10px_32px_rgba(0,0,0,.05)] sm:p-7">
           <div className="space-y-[19px]">
-            <label className="block text-[13px] font-medium">Seu nome <span className="text-[#6F4F28]">*</span><input className="form-input mt-2 h-[47px] rounded-[12px]" type="text" name="name" autoComplete="name" maxLength={120} required value={name} onChange={event => setName(event.target.value)} placeholder="Como podemos chamar você?" /></label>
-            <label className="block text-[13px] font-medium">Telefone com DDD <span className="text-[#6F4F28]">*</span><input className="form-input mt-2 h-[47px] rounded-[12px]" type="tel" name="phone" autoComplete="tel" inputMode="tel" maxLength={30} required value={phone} onChange={event => setPhone(event.target.value)} placeholder="(11) 99999-0000" /></label>
-            <label className="block text-[13px] font-medium">Dia em que você foi ao culto <span className="text-[#6F4F28]">*</span><input className="form-input mt-2 h-[47px] rounded-[12px]" type="date" name="visitedOn" max={localDateInputValue()} required value={visitedOn} onChange={event => setVisitedOn(event.target.value)} /></label>
-            <label className="block text-[13px] font-medium">Deseja deixar um pedido de oração? <span className="font-normal text-[#75675D]">Opcional</span><textarea className="form-input form-textarea mt-2 min-h-[96px] rounded-[12px] bg-[#FBF8F4] text-[13px] leading-5" name="prayerRequest" maxLength={2000} rows={3} value={prayerRequest} onChange={event => setPrayerRequest(event.target.value)} placeholder="Se quiser, escreva aqui seu pedido." /></label>
-            <label className="flex cursor-pointer items-start gap-2.5 rounded-xl bg-[#FBF8F4] px-3 py-3 text-[12px] leading-5 text-[#75675D]"><input className="mt-1 size-4 shrink-0 accent-[#6F4F28]" type="checkbox" name="contactConsent" checked={contactConsent} onChange={event => setContactConsent(event.target.checked)} /><span><span className="font-medium">Aceito receber uma mensagem da equipe de Boas-Vindas.</span><span className="block text-[#75675D]">Opcional. Você pode concluir sem autorizar contato.</span></span></label>
+            <label className="block text-[13px] font-medium">Seu nome <span className="text-[#8A6729]">*</span><input className="form-input mt-2 h-[47px] rounded-[12px]" type="text" name="name" autoComplete="name" maxLength={120} required value={name} onChange={event => setName(event.target.value)} placeholder="Como podemos chamar você?" /></label>
+            <label className="block text-[13px] font-medium">Telefone com DDD <span className="text-[#8A6729]">*</span><input className="form-input mt-2 h-[47px] rounded-[12px]" type="tel" name="phone" autoComplete="tel" inputMode="tel" maxLength={30} required value={phone} onChange={event => setPhone(event.target.value)} placeholder="(11) 99999-0000" /></label>
+            <label className="block text-[13px] font-medium">Dia em que você foi ao culto <span className="text-[#8A6729]">*</span><input className="form-input mt-2 h-[47px] rounded-[12px]" type="date" name="visitedOn" max={localDateInputValue()} required value={visitedOn} onChange={event => setVisitedOn(event.target.value)} /></label>
+            <label className="block text-[13px] font-medium">Deseja deixar um pedido de oração? <span className="font-normal text-[#68645C]">Opcional</span><textarea className="form-input form-textarea mt-2 min-h-[96px] rounded-[12px] bg-[#FBF9F4] text-[13px] leading-5" name="prayerRequest" maxLength={2000} rows={3} value={prayerRequest} onChange={event => setPrayerRequest(event.target.value)} placeholder="Se quiser, escreva aqui seu pedido." /></label>
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-xl bg-[#FBF9F4] px-3 py-3 text-[12px] leading-5 text-[#68645C]"><input className="mt-1 size-4 shrink-0 accent-[#8A6729]" type="checkbox" name="contactConsent" checked={contactConsent} onChange={event => setContactConsent(event.target.checked)} /><span><span className="font-medium">Aceito receber uma mensagem da equipe de Boas-Vindas.</span><span className="block text-[#68645C]">Opcional. Você pode concluir sem autorizar contato.</span></span></label>
           </div>
           <div className="visitor-honeypot" aria-hidden="true"><label>Website<input type="text" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={event => setWebsite(event.target.value)} /></label></div>
           {error && <p role="alert" className="status-negative mt-4 rounded-xl border px-4 py-3 text-sm leading-5">{error}</p>}
-          <Button type="submit" disabled={submitting} className="mt-5 min-h-[52px] w-full rounded-xl bg-[#6F4F28] px-4 text-sm font-semibold hover:bg-[#5C3F20]">{submitting ? 'Enviando...' : 'Concluir'}</Button>
+          <Button type="submit" disabled={submitting} className="mt-5 min-h-[52px] w-full rounded-xl bg-[#8A6729] px-4 text-sm font-semibold hover:bg-[#6B4F1D]">{submitting ? 'Enviando...' : 'Concluir'}</Button>
         </form>}
 
         <footer className="max-w-[700px] px-2 pb-1 pt-6 text-center sm:pt-7">
-          <p className="flex items-center justify-center gap-2 text-[10px] font-semibold uppercase tracking-[.08em] text-[#75675D]"><ShieldCheck size={14}/>Cuidado e privacidade</p>
-          <p className="mx-auto mt-2 max-w-[520px] text-[11px] leading-[1.6] text-[#75675D]">Seus dados são confidenciais e utilizados apenas pela nossa equipe de acolhimento pastoral para orar por você e entrar em contato com respeito.</p>
-          <div className="mt-5 border-t border-[#E8DED4] pt-4 text-[11px] text-[#75675D]">ADLago • Ministério de Boas-Vindas</div>
+          <p className="flex items-center justify-center gap-2 text-[10px] font-semibold uppercase tracking-[.08em] text-[#68645C]"><ShieldCheck size={14}/>Cuidado e privacidade</p>
+          <p className="mx-auto mt-2 max-w-[520px] text-[11px] leading-[1.6] text-[#68645C]">Seus dados são confidenciais e utilizados apenas pela nossa equipe de acolhimento pastoral para orar por você e entrar em contato com respeito.</p>
+          <div className="mt-5 border-t border-[#E5DDCF] pt-4 text-[11px] text-[#68645C]">ADLago • Ministério de Boas-Vindas</div>
         </footer>
       </div>
     </section>

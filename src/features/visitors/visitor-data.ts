@@ -46,8 +46,8 @@ export function createDemoVisitors(now = new Date()): VisitorPerson[] {
       fullName: 'Visitante Exemplo 01',
       phoneNormalized: '+5511900000001',
       visits: [
-        { id: 'demo-visit-01a', registeredAt: demoDate(now, 20), source: 'qr', serviceLabel: 'Domingo - Noite (18:30)' },
-        { id: 'demo-visit-01b', registeredAt: demoDate(now, 0), source: 'qr', serviceLabel: 'Domingo - Noite (18:30)' },
+        { id: 'demo-visit-01a', registeredAt: demoDate(now, 20), source: 'qr', serviceLabel: 'Domingo às 18h' },
+        { id: 'demo-visit-01b', registeredAt: demoDate(now, 0), source: 'qr', serviceLabel: 'Domingo às 18h' },
       ],
       gifts: [{ id: 'demo-gift-01', deliveredAt: demoDate(now, 5), giftType: 'Marca-página de boas-vindas', quantity: 1, responsible: 'Equipe de demonstração' }],
       prayerRequest: 'Pedido fictício: que a família encontre saúde, paz e força.',
@@ -57,7 +57,7 @@ export function createDemoVisitors(now = new Date()): VisitorPerson[] {
       id: 'demo-person-02',
       fullName: 'Visitante Exemplo 02',
       phoneNormalized: '+5511900000002',
-      visits: [{ id: 'demo-visit-02a', registeredAt: demoDate(now, 6), source: 'qr', serviceLabel: 'Domingo - Noite (18:30)' }],
+      visits: [{ id: 'demo-visit-02a', registeredAt: demoDate(now, 6), source: 'qr', serviceLabel: 'Domingo às 18h' }],
       gifts: [],
       prayerRequest: null,
       staffNote: '',
@@ -67,8 +67,8 @@ export function createDemoVisitors(now = new Date()): VisitorPerson[] {
       fullName: 'Visitante Demonstração 03',
       phoneNormalized: '+5511900000003',
       visits: [
-        { id: 'demo-visit-03a', registeredAt: demoDate(now, 35), source: 'staff', serviceLabel: 'Domingo Manhã (09:00)' },
-        { id: 'demo-visit-03b', registeredAt: demoDate(now, 1), source: 'qr', serviceLabel: 'Domingo - Noite (18:30)' },
+        { id: 'demo-visit-03a', registeredAt: demoDate(now, 35), source: 'staff', serviceLabel: 'Domingo às 10h' },
+        { id: 'demo-visit-03b', registeredAt: demoDate(now, 1), source: 'qr', serviceLabel: 'Domingo às 18h' },
       ],
       gifts: [],
       prayerRequest: 'Pedido fictício de oração por uma pessoa querida.',
@@ -78,7 +78,7 @@ export function createDemoVisitors(now = new Date()): VisitorPerson[] {
       id: 'demo-person-04',
       fullName: 'Visitante Exemplo 04',
       phoneNormalized: '+5511900000004',
-      visits: [{ id: 'demo-visit-04a', registeredAt: demoDate(now, 48), source: 'qr', serviceLabel: 'Domingo Manhã (09:00)' }],
+      visits: [{ id: 'demo-visit-04a', registeredAt: demoDate(now, 48), source: 'qr', serviceLabel: 'Domingo às 10h' }],
       gifts: [],
       prayerRequest: null,
       staffNote: '',
@@ -99,7 +99,7 @@ export function addManualVisit(
   const phoneNormalized = normalizeBrazilianPhone(phoneInput)
   if (!phoneNormalized) return { ok: false, error: 'phone' }
 
-  const visit: VisitorVisit = { id: makeId(), registeredAt, source: 'staff', serviceLabel: 'Domingo - Noite (18:30)' }
+  const visit: VisitorVisit = { id: makeId(), registeredAt, source: 'staff', serviceLabel: 'Domingo às 18h' }
   const existing = people.find(person => person.phoneNormalized === phoneNormalized)
   if (existing) {
     return {

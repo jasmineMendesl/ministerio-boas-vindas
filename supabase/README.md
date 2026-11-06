@@ -41,3 +41,9 @@ O runtime Supabase disponibiliza as chaves administrativas para Edge Functions. 
 A migration 202611050003_two_role_access_model.sql substitui os perfis por apenas admin e team. Ela converte perfis existentes pastoral para team (sem elevar privilegios) e atualiza as politicas RLS. Admin pode gerenciar perfis e todos os registros. Team pode operar visitantes, decisoes e acompanhamentos, mas tem somente leitura em eventos e convites do Projeto Pertencer. O Dashboard e uma tela de consulta; nao possui operacoes de escrita. O frontend consulta o proprio perfil ativo e bloqueia contas sem role valido, enquanto RLS continua sendo a protecao efetiva no banco.
 
 A migration 202611050004_visitor_service_gift_reports.sql cria o fechamento por culto: data, identificacao do culto, quantidade de mimos e usuario responsavel. Ela e separada das entregas individuais em gift_deliveries. Admin gerencia todos os fechamentos; team consulta e pode registrar/editar os proprios, sem excluir. Aplicar depois da migration de perfis de duas funcoes.
+
+## Escalas do Ministério
+
+A migration `202611060002_ministry_schedules_and_auth_profiles.sql` cria escalas por data e culto (domingo às 10h, domingo às 18h e quinta às 19h15), permitindo múltiplos voluntários por função e várias funções por pessoa. O perfil é ligado ao usuário de autenticação pelo ID; novos usuários Auth recebem perfil `team` automaticamente. Somente administradores consultam os e-mails de login para mapear o nome do voluntário. A equipe consulta as escalas e a própria próxima atribuição; somente admin cria, altera ou exclui escalas.
+
+Depois de aplicar essa migration, o administrador poderá revisar o nome vinculado a cada e-mail na tela **Escala**. Perfis existentes são preservados; usuários Auth sem perfil recebem `team`.

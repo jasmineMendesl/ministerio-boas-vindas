@@ -37,7 +37,7 @@ describe('rotas e autenticação da equipe', () => {
     expect(screen.getByRole('heading', { name: 'Bem-vindo de volta' })).toBeTruthy()
   })
 
-  it('permite navegar entre as quatro áreas quando há sessão', async () => {
+  it('permite navegar entre as cinco áreas quando há sessão', async () => {
     authMocks.session = { user: { email: 'equipe@example.org' } }
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={['/visitantes']}><App /></MemoryRouter>)
@@ -51,7 +51,7 @@ describe('rotas e autenticação da equipe', () => {
     const sidebar = screen.getByRole('complementary')
     expect(sidebar.classList.contains('sidebar')).toBe(true)
     expect(within(sidebar).getByRole('link', { name: 'Acolher Visitante' })).toBeTruthy()
-    expect(within(sidebar).getByRole('navigation', { name: 'Menu principal' }).querySelectorAll('a')).toHaveLength(4)
+    expect(within(sidebar).getByRole('navigation', { name: 'Menu principal' }).querySelectorAll('a')).toHaveLength(5)
     expect(screen.getAllByText('Confirmado').some(node => node.classList.contains('status-positive'))).toBe(true)
     expect(screen.getAllByText('Ausente justificado').some(node => node.classList.contains('status-negative'))).toBe(true)
     expect(screen.getAllByText('Aguardando resposta').some(node => node.classList.contains('status-pending'))).toBe(true)

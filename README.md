@@ -1,6 +1,6 @@
 # Ministério de Boas-Vindas
 
-Aplicação mobile-first do Ministério de Boas-Vindas. Inclui autenticação da equipe, quatro áreas internas e cadastro público de visitantes. Projeto Pertencer é o café com visitantes realizado pelo ministério.
+Aplicação mobile-first do Ministério de Boas-Vindas. Inclui autenticação da equipe, cinco áreas internas e cadastro público de visitantes. Projeto Pertencer é o café com visitantes realizado pelo ministério.
 
 ## Executar localmente
 
@@ -41,3 +41,7 @@ npm test
 npm run test:db
 npm run build
 ```
+
+## Escalas
+
+A área autenticada `/escala` permite que admin cadastre uma escala por data e culto (domingo às 10h, domingo às 18h ou quinta às 19h15), atribua voluntários em sete funções e mapeie cada nome ao e-mail de login. Team tem acesso somente de leitura. A próxima atribuição pessoal aparece em destaque no Dashboard. A migration `202611060002_ministry_schedules_and_auth_profiles.sql` precisa ser aplicada no Supabase para ativar o módulo.

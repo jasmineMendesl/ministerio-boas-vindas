@@ -1,5 +1,6 @@
 import { normalizeBrazilianPhone, normalizeVisitorName } from '../../../supabase/functions/_shared/visitor-validation.ts'
 import type { VisitorPerson } from '../visitors/visitor-data'
+import type { InvitationStatus } from '../pertencer/invitation-status'
 
 export type DecisionType = 'acceptance' | 'reconciliation'
 export type FollowUpStatus = 'awaiting_first_contact' | 'contact_made' | 'awaiting_response' | 'responded' | 'invited' | 'awaiting_confirmation' | 'confirmed' | 'attended' | 'no_show' | 'declined' | 'unable_to_contact'
@@ -25,6 +26,8 @@ export type DecisionRecord = {
   decidedOn: string
   observations: string
   followUp: DecisionFollowUp
+  invitationId?: string
+  invitationStatus?: InvitationStatus
 }
 
 export type NewDecision = Omit<DecisionRecord, 'id' | 'followUp'>

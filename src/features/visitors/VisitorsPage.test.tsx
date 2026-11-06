@@ -64,7 +64,7 @@ describe('Visitors screen', () => {
     await screen.findByText(/registrado no Supabase/)
     expect(giftSupabase.query.insert).toHaveBeenCalledWith(expect.objectContaining({
       service_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-      service_label: 'Domingo - Noite (18:30)',
+      service_label: 'Domingo às 18h',
       gifts_delivered: 6,
       responsible_user_id: 'auth-team-1',
     }))
@@ -73,7 +73,7 @@ describe('Visitors screen', () => {
   it('allows admins to delete a gift report only after confirmation', async () => {
     visitorAuth.role = 'admin'
     giftSupabase.state.rows = [{
-      id: 'report-1', service_date: '2026-11-01', service_label: 'Domingo - Noite (18:30)', gifts_delivered: 6,
+      id: 'report-1', service_date: '2026-11-01', service_label: 'Domingo às 18h', gifts_delivered: 6,
       responsible_user_id: 'auth-team-1', responsible_profile: { display_name: 'Líder de exemplo' },
     }]
     render(<VisitorsPage />)

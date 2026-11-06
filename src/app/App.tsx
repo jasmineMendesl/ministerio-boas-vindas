@@ -7,6 +7,7 @@ import { VisitorsPage } from '../features/visitors/VisitorsPage'
 import { DecisionRegistrationPage, DecisionsModule, DecisionsPage } from '../features/decisions/DecisionsPage'
 import { PertencerPage } from '../features/pertencer/PertencerPage'
 import { PublicVisitorPage } from '../features/visitors/PublicVisitorPage'
+import { SchedulePage } from '../features/schedule/SchedulePage'
 
 export function App() {
   return (
@@ -22,6 +23,7 @@ export function App() {
             <Route path="nova" element={<DecisionRegistrationPage />} />
           </Route>
           <Route path="/pertencer" element={<PertencerPage />} />
+          <Route path="/escala" element={<SchedulePage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
