@@ -1,14 +1,22 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { sendPushToUsers } from '../_shared/web-push.ts'
 
-const allowedOrigins = (Deno.env.get('VISITOR_ALLOWED_ORIGINS') ?? 'http://localhost:5173,http://127.0.0.1:5173')
-  .split(',').map(value => value.trim()).filter(Boolean)
+function normalizeOrigin(value: string) {
+  try {
+    const parsed = new URL(value.trim())
+    if (parsed.pathname !== '/' || parsed.search || parsed.hash) return ''
+    return parsed.origin.toLowerCase()
+  } catch { return '' }
+}
+
+const allowedOrigins = new Set((Deno.env.get('VISITOR_ALLOWED_ORIGINS') ?? 'http://localhost:5173,http://127.0.0.1:5173')
+  .split(',').map(normalizeOrigin).filter(Boolean))
 
 Deno.serve(async (request) => {
   const origin = request.headers.get('origin')
-  const cors = { 'Access-Control-Allow-Origin': origin ?? '', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'authorization, apikey, x-client-info, content-type', Vary: 'Origin' }
+  const cors = { 'Access-Control-Allow-Origin': origin ? normalizeOrigin(origin) : '', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'authorization, apikey, x-client-info, content-type', Vary: 'Origin' }
   const json = (body: unknown, status = 200) => Response.json(body, { status, headers: cors })
-  if (origin && !allowedOrigins.includes(origin)) return json({ error: 'Origem não autorizada.' }, 403)
+  if (origin && !allowedOrigins.has(normalizeOrigin(origin))) return json({ error: 'Origem não autorizada.' }, 403)
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors })
   if (request.method !== 'POST') return json({ error: 'Método não permitido.' }, 405)
 

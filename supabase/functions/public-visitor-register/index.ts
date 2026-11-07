@@ -13,18 +13,28 @@ const successBody = {
   message: 'Obrigado por compartilhar seu contato. Em breve, nossa equipe poderá falar com você.',
 }
 
-const allowedOrigins = (Deno.env.get('VISITOR_ALLOWED_ORIGINS') ?? 'http://localhost:5173,http://127.0.0.1:5173')
-  .split(',')
-  .map((value) => value.trim())
-  .filter(Boolean)
+function normalizeOrigin(value: string): string {
+  try {
+    const parsed = new URL(value.trim())
+    if (parsed.pathname !== '/' || parsed.search || parsed.hash) return ''
+    return parsed.origin.toLowerCase()
+  } catch { return '' }
+}
+
+const allowedOrigins = new Set((Deno.env.get('VISITOR_ALLOWED_ORIGINS') ?? 'http://localhost:5173,http://127.0.0.1:5173')
+  .split(',').map(normalizeOrigin).filter(Boolean))
+
+function isAllowedOrigin(origin: string | null): origin is string {
+  return origin !== null && allowedOrigins.has(normalizeOrigin(origin))
+}
 
 function corsHeaders(origin: string | null): HeadersInit {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json; charset=utf-8',
     'Vary': 'Origin',
   }
-  if (origin && allowedOrigins.includes(origin)) {
-    headers['Access-Control-Allow-Origin'] = origin
+  if (isAllowedOrigin(origin)) {
+    headers['Access-Control-Allow-Origin'] = normalizeOrigin(origin)
     headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
     headers['Access-Control-Allow-Headers'] = 'authorization, apikey, x-client-info, content-type'
     headers['Access-Control-Max-Age'] = '86400'
@@ -66,12 +76,12 @@ function saoPauloToday(): string {
 
 Deno.serve(async (request) => {
   const origin = request.headers.get('origin')
-  if (origin && !allowedOrigins.includes(origin)) {
+  if (origin && !isAllowedOrigin(origin)) {
     return jsonResponse({ ok: false, message: 'Origem não autorizada.' }, 403, null)
   }
 
   if (request.method === 'OPTIONS') {
-    return origin && allowedOrigins.includes(origin)
+    return isAllowedOrigin(origin)
       ? new Response(null, { status: 204, headers: corsHeaders(origin) })
       : jsonResponse({ ok: false, message: 'Origem não autorizada.' }, 403, null)
   }
