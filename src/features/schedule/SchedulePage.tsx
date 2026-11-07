@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { CalendarDays, Plus, Trash2, UsersRound, X } from 'lucide-react'
 import { useAuth } from '../../app/AuthProvider'
 import { supabase } from '../../lib/supabase'
-
 const roles = [
   ['leader', 'Líder'],
   ['support', 'Apoio'],
@@ -12,16 +11,13 @@ const roles = [
   ['opening_prayer', 'Oração Inicial'],
   ['closing_prayer', 'Oração Final'],
 ] as const
-
 type Volunteer = { id: string; display_name: string }
 type Assignment = { id: string; schedule_id: string; volunteer_profile_id: string; ministry_role: string; volunteer?: Volunteer }
 type ServiceLabel = 'Domingo às 10h' | 'Domingo às 18h' | 'Quinta às 19h15'
 type Schedule = { id: string; service_date: string; service_label: ServiceLabel; published_at: string | null; assignments: Assignment[] }
-
 function formatDate(value: string) {
   return new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
-
 export function SchedulePage() {
   const { role, session } = useAuth()
   const isAdmin = role === 'admin'
@@ -29,13 +25,10 @@ export function SchedulePage() {
   const [volunteers, setVolunteers] = useState<Volunteer[]>([])
   const [newDate, setNewDate] = useState('')
   const [newService, setNewService] = useState<ServiceLabel>('Domingo às 10h')
-  const [selectedPeople, setSelectedPeople] = useState<Record<string, string>>({})
-  const [selectedRoles, setSelectedRoles] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
-
   const load = useCallback(async () => {
     if (!supabase) { setError('Supabase não está configurado.'); setLoading(false); return }
     setLoading(true); setError('')
@@ -58,9 +51,7 @@ export function SchedulePage() {
     }
     setLoading(false)
   }, [])
-
   useEffect(() => { void load() }, [load, session?.user.id])
-
   async function createSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(''); setNotice('')
     if (!supabase || !session?.user.id || !isAdmin) return
@@ -70,11 +61,8 @@ export function SchedulePage() {
     if (saveError) { setError(saveError.code === '23505' ? 'Já existe uma escala para essa data.' : 'Não foi possível criar a escala.'); return }
     setNewDate(''); setNotice('Escala criada. Agora adicione as funções e voluntários.'); await load()
   }
-
-  async function addAssignment(event: FormEvent<HTMLFormElement>, schedule: Schedule) {
-    event.preventDefault(); setError(''); setNotice('')
-    const personId = selectedPeople[schedule.id]
-    const ministryRole = selectedRoles[schedule.id] ?? roles[0][0]
+  async function addAssignment(schedule: Schedule, ministryRole: string, personId: string) {
+    setError(''); setNotice('')
     if (!supabase || !session?.user.id || !isAdmin || !personId) return
     setSaving(true)
     const { error: saveError } = await supabase.from('ministry_schedule_assignments').insert({ schedule_id: schedule.id, volunteer_profile_id: personId, ministry_role: ministryRole, created_by: session.user.id })
@@ -82,21 +70,18 @@ export function SchedulePage() {
     if (saveError) { setError(saveError.code === '23505' ? 'Essa pessoa já está nessa função nesta escala.' : 'Não foi possível adicionar a atribuição.'); return }
     setNotice('Voluntário adicionado à escala.'); await load()
   }
-
   async function removeAssignment(item: Assignment) {
     if (!supabase || !isAdmin) return
     const { error: removeError } = await supabase.from('ministry_schedule_assignments').delete().eq('id', item.id)
     if (removeError) { setError('Não foi possível remover essa atribuição.'); return }
     await load()
   }
-
   async function deleteSchedule(schedule: Schedule) {
     if (!supabase || !isAdmin || !window.confirm(`Excluir a escala ${schedule.service_label} de ${formatDate(schedule.service_date)} e todas as atribuições?`)) return
     const { error: deleteError } = await supabase.from('ministry_schedules').delete().eq('id', schedule.id)
     if (deleteError) { setError('Não foi possível excluir a escala.'); return }
     setNotice('Escala excluída.'); await load()
   }
-
   async function publishSchedule(schedule: Schedule) {
     if (!supabase || !session?.user.id || !isAdmin) return
     if (!schedule.assignments.length) { setError('Adicione ao menos um voluntário antes de publicar.'); return }
@@ -118,7 +103,6 @@ export function SchedulePage() {
     else if (!data.sent) setNotice('Escala publicada. Nenhum voluntário atribuído ativou notificações neste dispositivo.')
     else setNotice(`Escala publicada e aviso enviado para ${data.sent} dispositivo(s).`)
   }
-
   return <div className="animate-in space-y-5">
     <header className="rounded-2xl border border-[#E5DDCF] bg-[linear-gradient(110deg,#fff_0%,#fff_72%,#F0E6D2_100%)] p-5 sm:p-7">
       <span className="inline-flex items-center gap-2 rounded-full bg-[#F0E6D2] px-3 py-1.5 text-xs font-semibold text-[#8A6729]"><CalendarDays size={14}/>MINISTÉRIO DE BOAS-VINDAS</span>
@@ -136,12 +120,12 @@ export function SchedulePage() {
     {loading && <p role="status" className="text-sm text-[#68645C]">Carregando escalas…</p>}
     {!loading && !error && schedules.length === 0 && <section className="rounded-2xl border border-dashed border-[#D9CCB2] bg-white p-8 text-center"><CalendarDays size={24} className="mx-auto text-[#8A6729]"/><h2 className="mt-3 font-semibold">Nenhuma escala cadastrada</h2><p className="mt-1 text-sm text-[#68645C]">{isAdmin ? 'Crie uma escala para começar a atribuir as funções.' : 'O administrador ainda não cadastrou escalas.'}</p></section>}
     <div className="space-y-4">{schedules.map(schedule => <section key={schedule.id} className="overflow-hidden rounded-2xl border border-[#E5DDCF] bg-white shadow-[0_3px_12px_rgba(0,0,0,.035)]">
-      <header className="flex items-center justify-between gap-3 border-b border-[#E5DDCF] bg-[#FBF9F4] px-4 py-4 sm:px-5"><div className="flex min-w-0 items-center gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#F0E6D2] text-[#8A6729]"><CalendarDays size={18}/></span><div><p className="text-xs uppercase tracking-wide text-[#68645C]">{schedule.service_label} · {schedule.published_at ? 'Publicada' : 'Rascunho'}</p><h2 className="font-semibold capitalize">{formatDate(schedule.service_date)}</h2></div></div>{isAdmin && <div className="flex shrink-0 items-center gap-2"><button type="button" disabled={saving || !schedule.assignments.length} onClick={() => void publishSchedule(schedule)} className="rounded-lg bg-[#8A6729] px-3 py-2 text-xs font-semibold text-white disabled:opacity-60">{schedule.published_at ? 'Publicar atualização' : 'Publicar escala'}</button><button type="button" aria-label={`Excluir escala de ${schedule.service_label} em ${formatDate(schedule.service_date)}`} onClick={() => void deleteSchedule(schedule)} className="grid size-9 shrink-0 place-items-center rounded-lg text-[#8B3C32] hover:bg-red-50"><Trash2 size={16}/></button></div>}</header>
+      <header className="flex flex-col gap-3 border-b border-[#E5DDCF] bg-[#FBF9F4] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"><div className="flex min-w-0 items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#F0E6D2] text-[#8A6729]"><CalendarDays size={18}/></span><div className="min-w-0"><p className="break-words text-xs uppercase tracking-wide text-[#68645C]">{schedule.service_label} · {schedule.published_at ? 'Publicada' : 'Rascunho'}</p><h2 className="break-words font-semibold capitalize">{formatDate(schedule.service_date)}</h2></div></div>{isAdmin && <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0"><button type="button" disabled={saving || !schedule.assignments.length} onClick={() => void publishSchedule(schedule)} className="min-h-10 min-w-0 flex-1 rounded-lg bg-[#8A6729] px-3 py-2 text-xs font-semibold text-white disabled:opacity-60 sm:flex-none">{schedule.published_at ? 'Publicar atualização' : 'Publicar escala'}</button><button type="button" aria-label={`Excluir escala de ${schedule.service_label} em ${formatDate(schedule.service_date)}`} onClick={() => void deleteSchedule(schedule)} className="grid size-10 shrink-0 place-items-center rounded-lg text-[#8B3C32] hover:bg-red-50"><Trash2 size={16}/></button></div>}</header>
       <div className="divide-y divide-[#EEE8DC]">{roles.map(([key, label]) => {
         const assigned = schedule.assignments.filter(item => item.ministry_role === key)
-        return <div key={key} className="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(190px,.8fr)_minmax(0,1.5fr)] sm:items-center sm:px-5"><p className="text-sm font-medium">{label}</p><div className="flex flex-wrap gap-2">{assigned.map(item => <span key={item.id} className="inline-flex items-center gap-2 rounded-full bg-[#F7F2E8] px-3 py-1.5 text-sm"><UsersRound size={14} className="text-[#8A6729]"/>{item.volunteer?.display_name ?? 'Voluntário'}{isAdmin && <button type="button" aria-label={`Remover ${item.volunteer?.display_name ?? 'voluntário'} da função ${label}`} onClick={() => void removeAssignment(item)} className="ml-1 rounded-full text-[#8B3C32] hover:text-red-800"><X size={14}/></button>}</span>)}{assigned.length === 0 && <span className="text-sm text-[#938B7E]">Ainda sem voluntário</span>}</div></div>
+        const assignedVolunteerIds = new Set(assigned.map(item => item.volunteer_profile_id))
+        return <div key={key} className="grid min-w-0 gap-2 px-4 py-3 sm:grid-cols-[minmax(190px,.8fr)_minmax(0,1.5fr)] sm:items-start sm:px-5"><div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><p className="break-words text-sm font-medium">{label}</p>{isAdmin && <select aria-label={`Selecionar voluntário para ${label}`} className="form-input h-10 w-full text-sm sm:max-w-56" value="" disabled={saving || volunteers.length === 0} onChange={event => { if (event.target.value) void addAssignment(schedule, key, event.target.value) }}><option value="">Adicionar voluntário</option>{volunteers.filter(person => !assignedVolunteerIds.has(person.id)).map(person => <option key={person.id} value={person.id}>{person.display_name}</option>)}</select>}</div><div className="flex min-w-0 flex-wrap gap-2">{assigned.map(item => <span key={item.id} className="inline-flex max-w-full items-center gap-2 rounded-full bg-[#F7F2E8] px-3 py-1.5 text-sm"><UsersRound size={14} className="shrink-0 text-[#8A6729]"/><span className="break-words">{item.volunteer?.display_name ?? 'Voluntário'}</span>{isAdmin && <button type="button" aria-label={`Remover ${item.volunteer?.display_name ?? 'voluntário'} da função ${label}`} onClick={() => void removeAssignment(item)} className="ml-1 shrink-0 rounded-full text-[#8B3C32] hover:text-red-800"><X size={14}/></button>}</span>)}{assigned.length === 0 && <span className="text-sm text-[#938B7E]">Ainda sem voluntário</span>}</div></div>
       })}</div>
-      {isAdmin && <form onSubmit={event => void addAssignment(event, schedule)} className="grid gap-2 border-t border-[#E5DDCF] bg-[#FBF9F4] p-4 sm:grid-cols-[1fr_1.2fr_auto] sm:items-end sm:px-5"><label className="text-xs font-medium">Função<select className="form-input mt-1.5 h-10 w-full" value={selectedRoles[schedule.id] ?? roles[0][0]} onChange={event => setSelectedRoles(current => ({ ...current, [schedule.id]: event.target.value }))}>{roles.map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label><label className="text-xs font-medium">Voluntário<select className="form-input mt-1.5 h-10 w-full" required value={selectedPeople[schedule.id] ?? ''} onChange={event => setSelectedPeople(current => ({ ...current, [schedule.id]: event.target.value }))}><option value="">Selecione um voluntário</option>{volunteers.map(person => <option key={person.id} value={person.id}>{person.display_name}</option>)}</select></label><button type="submit" disabled={saving || volunteers.length === 0} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#8A6729] px-4 text-sm font-medium text-white disabled:opacity-50"><Plus size={15}/>Adicionar função</button></form>}
     </section>)}</div>
   </div>
 }
