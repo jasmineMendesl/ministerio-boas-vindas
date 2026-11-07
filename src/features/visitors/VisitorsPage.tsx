@@ -1,11 +1,11 @@
-﻿import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import QRCode from 'qrcode'
 import { Bookmark, CalendarDays, Check, ClipboardCopy, Eye, MessageSquare, Pencil, Plus, QrCode, Search, Trash2, UserRound, UsersRound, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { useAuth } from '../../app/AuthProvider'
 import { supabase } from '../../lib/supabase'
-import { buildPublicVisitorUrl, filterVisitors, firstVisit, formatVisitorPhone, type VisitorPerson } from './visitor-data'
+import { buildPublicVisitorUrl, filterVisitors, firstVisit, formatVisitorPhone, type VisitorPerson, type VisitorVisit } from './visitor-data'
 import { isValidPrayerRequest, isValidServiceDate, normalizeBrazilianPhone, normalizePrayerRequest, normalizeVisitorName } from '../../../supabase/functions/_shared/visitor-validation'
 import { matchesServiceDay, type ServiceDayFilter } from '../../lib/service-day'
 
@@ -13,11 +13,21 @@ const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Jul
 const services = ['Todos os cultos', 'Domingo às 10h', 'Domingo às 18h', 'Quinta às 19h15']
 type ServiceGiftReport = { id: string; serviceDate: string; serviceLabel: string; giftsDelivered: number; responsible: string }
 type ServiceGiftReportRow = { id: string; service_date: string; service_label: string; gifts_delivered: number; responsible_user_id: string; responsible_profile: { display_name: string } | null }
+type VisitorTab = 'gifts' | 'visitors'
+type VisitorSourceFilter = 'qr' | 'all'
 function localDateInput() { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}` }
 
 function formatDate(value: string, includeTime = false) {
   const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value
   return new Date(date).toLocaleString('pt-BR', includeTime ? { dateStyle: 'short', timeStyle: 'short' } : { dateStyle: 'medium' })
+}
+
+function visitorVisitMatchesFilters(visit: VisitorVisit, month: number, year: number, serviceDay: ServiceDayFilter) {
+  const value = visit.visitedOn ?? visit.registeredAt
+  const date = new Date(value.length === 10 ? `${value}T12:00:00` : value)
+  return (month === 0 || date.getMonth() + 1 === month)
+    && (year === 0 || date.getFullYear() === year)
+    && matchesServiceDay(value, serviceDay)
 }
 
 function MetricCard({ icon: Icon, label, value, helper }: { icon: LucideIcon; label: string; value: string | number; helper: string }) {
@@ -34,6 +44,7 @@ export function VisitorsPage() {
   const [month, setMonth] = useState(new Date().getMonth() + 1)
   const [year, setYear] = useState(new Date().getFullYear())
   const [serviceDay, setServiceDay] = useState<ServiceDayFilter>('all')
+  const [visitorSource, setVisitorSource] = useState<VisitorSourceFilter>('qr')
   const [showManualForm, setShowManualForm] = useState(false)
   const [manualName, setManualName] = useState('')
   const [manualPhone, setManualPhone] = useState('')
@@ -59,6 +70,9 @@ export function VisitorsPage() {
   const [qrImage, setQrImage] = useState('')
   const [copied, setCopied] = useState(false)
   const [giftReports, setGiftReports] = useState<ServiceGiftReport[]>([])
+  const [activeVisitorTab, setActiveVisitorTab] = useState<VisitorTab>('visitors')
+  const [giftPage, setGiftPage] = useState(1)
+  const [giftPageSize, setGiftPageSize] = useState<5 | 10 | 25>(5)
   const [showGiftReport, setShowGiftReport] = useState(false)
   const [showGiftReportConfirmation, setShowGiftReportConfirmation] = useState(false)
   const [reportToDelete, setReportToDelete] = useState<ServiceGiftReport | null>(null)
@@ -75,7 +89,15 @@ export function VisitorsPage() {
   const today = new Date()
   const visitorFormUrl = useMemo(() => buildPublicVisitorUrl(window.location.origin, import.meta.env.BASE_URL), [])
   const filteredPeople = filterVisitors(people, search, month, year, undefined, serviceDay)
+  const visiblePeople = visitorSource === 'qr'
+    ? filteredPeople.filter(person => person.visits.some(visit => visit.source === 'qr' && visitorVisitMatchesFilters(visit, month, year, serviceDay)))
+    : filteredPeople
   const bookmarksDelivered = giftReports.reduce((total, report) => total + report.giftsDelivered, 0)
+  const giftPageCount = Math.max(1, Math.ceil(giftReports.length / giftPageSize))
+  const currentGiftPage = Math.min(giftPage, giftPageCount)
+  const paginatedGiftReports = giftReports.slice((currentGiftPage - 1) * giftPageSize, currentGiftPage * giftPageSize)
+  const giftFirstVisible = giftReports.length ? (currentGiftPage - 1) * giftPageSize + 1 : 0
+  const giftLastVisible = Math.min(currentGiftPage * giftPageSize, giftReports.length)
   const qrRegistrations = people.filter(person => person.visits.some(visit => visit.source === 'qr')).length
   const fillRate = people.length ? Math.round((people.filter(person => person.gifts.length > 0).length / people.length) * 100) : 0
 
@@ -184,6 +206,7 @@ export function VisitorsPage() {
       return
     }
     await loadGiftReports()
+    setGiftPage(1)
     setNotice('Fechamento de mimos registrado no Supabase.')
     setShowGiftReport(false); setGiftReportQuantity('0')
     setShowGiftReportConfirmation(false)
@@ -316,33 +339,34 @@ export function VisitorsPage() {
       <MetricCard icon={UsersRound} label="Taxa de Preenchimento" value={`${fillRate}%`} helper="Pessoas com lembrancinha registrada"/>
     </section>
 
-    <section aria-labelledby="gift-report-title" className="overflow-hidden rounded-xl border border-[#E5DDCF] bg-white shadow-[0_2px_7px_rgba(0,0,0,.025)]">
-      <div className="flex flex-col gap-3 border-b border-[#F7F2E8] p-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 id="gift-report-title" className="flex items-center gap-2 text-sm font-semibold"><CalendarDays size={17} className="text-[#8A6729]"/>Fechamento de mimos por culto</h2><p className="mt-1 text-xs text-[#68645C]">O líder, entre os 6 voluntários do culto, informa a data e a quantidade entregue. O sistema identifica quem registrou.</p></div><Button type="button" size="sm" onClick={() => { setGiftReportError(''); setGiftReportDate(localDateInput()); setShowGiftReport(true) }} className="h-9 self-start rounded-lg bg-[#8A6729] px-3 text-xs hover:bg-[#6B4F1D] sm:self-auto"><Plus size={14}/> Registrar fechamento</Button></div>
-      {giftReportsError && <p role="alert" className="status-negative border-b px-4 py-2 text-xs">{giftReportsError}</p>}{giftReportsLoading ? <p className="px-4 py-5 text-xs text-[#68645C]">Carregando fechamentos...</p> : giftReports.length ? <div className="overflow-x-auto"><table className="w-full min-w-[460px] text-left text-sm"><thead className="bg-[#FBF9F4] text-xs text-[#68645C]"><tr><th className="px-4 py-2.5 font-medium">Data</th><th className="px-4 py-2.5 font-medium">Culto</th><th className="px-4 py-2.5 font-medium">Mimos entregues</th><th className="px-4 py-2.5 font-medium">Registrado por</th>{role === 'admin' && <th className="px-4 py-2.5 text-right font-medium">Ações</th>}</tr></thead><tbody>{giftReports.map(report => <tr key={report.id} className="border-t border-[#F7F2E8]"><td className="px-4 py-3">{new Date(report.serviceDate + 'T12:00:00').toLocaleDateString('pt-BR')}</td><td className="px-4 py-3">{report.serviceLabel}</td><td className="px-4 py-3 font-semibold">{report.giftsDelivered}</td><td className="px-4 py-3 text-xs text-[#68645C]">{report.responsible}</td>{role === 'admin' && <td className="px-4 py-3 text-right"><button type="button" aria-label={`Excluir fechamento de ${report.serviceLabel} em ${report.serviceDate}`} title="Excluir fechamento" onClick={() => { setDeleteError(''); setReportToDelete(report) }} className="inline-grid size-8 place-items-center rounded-lg text-[#B08A3E] hover:bg-[#F5EBD5]"><Trash2 size={15}/></button></td>}</tr>)}</tbody></table><p className="border-t border-[#F7F2E8] px-4 py-2 text-xs text-[#68645C]">Registros salvos no Supabase; total acumulado: {bookmarksDelivered} mimo(s).</p></div> : <p className="px-4 py-5 text-xs text-[#68645C]">Nenhum fechamento registrado.</p>}
-    </section>
+    <nav role="tablist" aria-label="Seções de visitantes" className="flex gap-1 rounded-xl border border-[#D9CCB2] bg-[#F0E6D2] p-1">
+      <button type="button" role="tab" aria-selected={activeVisitorTab === 'gifts'} aria-controls="gift-reports-panel" onClick={() => setActiveVisitorTab('gifts')} className={`min-h-10 flex-1 rounded-lg px-3 py-2 text-sm font-medium ${activeVisitorTab === 'gifts' ? 'bg-white text-[#8A6729] shadow-sm' : 'text-[#68645C]'}`}>Fechamento de mimos</button>
+      <button type="button" role="tab" aria-selected={activeVisitorTab === 'visitors'} aria-controls="visitors-panel" onClick={() => setActiveVisitorTab('visitors')} className={`min-h-10 flex-1 rounded-lg px-3 py-2 text-sm font-medium ${activeVisitorTab === 'visitors' ? 'bg-white text-[#8A6729] shadow-sm' : 'text-[#68645C]'}`}>Visitantes do QR Code</button>
+    </nav>
 
+    {activeVisitorTab === 'gifts' && <section id="gift-reports-panel" role="tabpanel" aria-labelledby="gift-report-title" className="overflow-hidden rounded-xl border border-[#E5DDCF] bg-white shadow-[0_2px_7px_rgba(0,0,0,.025)]">
+      <div className="flex flex-col gap-3 border-b border-[#F7F2E8] p-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 id="gift-report-title" className="flex items-center gap-2 text-sm font-semibold"><CalendarDays size={17} className="text-[#8A6729]"/>Fechamento de mimos por culto</h2><p className="mt-1 text-xs text-[#68645C]">O líder, entre os 6 voluntários do culto, informa a data e a quantidade entregue. O sistema identifica quem registrou.</p></div><Button type="button" size="sm" onClick={() => { setGiftReportError(''); setGiftReportDate(localDateInput()); setShowGiftReport(true) }} className="h-9 self-start rounded-lg bg-[#8A6729] px-3 text-xs hover:bg-[#6B4F1D] sm:self-auto"><Plus size={14}/> Registrar fechamento</Button></div>
+      {giftReportsError && <p role="alert" className="status-negative border-b px-4 py-2 text-xs">{giftReportsError}</p>}{giftReportsLoading ? <p className="px-4 py-5 text-xs text-[#68645C]">Carregando fechamentos...</p> : giftReports.length ? <div className="overflow-x-auto"><table className="w-full min-w-[460px] text-left text-sm"><thead className="bg-[#FBF9F4] text-xs text-[#68645C]"><tr><th className="px-4 py-2.5 font-medium">Data</th><th className="px-4 py-2.5 font-medium">Culto</th><th className="px-4 py-2.5 font-medium">Mimos entregues</th><th className="px-4 py-2.5 font-medium">Registrado por</th>{role === 'admin' && <th className="px-4 py-2.5 text-right font-medium">Ações</th>}</tr></thead><tbody>{paginatedGiftReports.map(report => <tr key={report.id} className="border-t border-[#F7F2E8]"><td className="px-4 py-3">{new Date(report.serviceDate + 'T12:00:00').toLocaleDateString('pt-BR')}</td><td className="px-4 py-3">{report.serviceLabel}</td><td className="px-4 py-3 font-semibold">{report.giftsDelivered}</td><td className="px-4 py-3 text-xs text-[#68645C]">{report.responsible}</td>{role === 'admin' && <td className="px-4 py-3 text-right"><button type="button" aria-label={`Excluir fechamento de ${report.serviceLabel} em ${report.serviceDate}`} title="Excluir fechamento" onClick={() => { setDeleteError(''); setReportToDelete(report) }} className="inline-grid size-8 place-items-center rounded-lg text-[#B08A3E] hover:bg-[#F5EBD5]"><Trash2 size={15}/></button></td>}</tr>)}</tbody></table><div className="flex flex-col gap-3 border-t border-[#F7F2E8] px-4 py-3 text-xs text-[#68645C] sm:flex-row sm:items-center sm:justify-between"><span>Exibindo {giftFirstVisible}–{giftLastVisible} de {giftReports.length} fechamentos</span><div className="flex flex-wrap items-center gap-2"><label className="flex items-center gap-2">Mostrar<select aria-label="Registros por página" className="h-9 rounded-lg border border-[#E5DDCF] bg-white px-2" value={giftPageSize} onChange={event => { setGiftPageSize(Number(event.target.value) as 5 | 10 | 25); setGiftPage(1) }}><option value={5}>5</option><option value={10}>10</option><option value={25}>25</option></select></label><span className="px-1">Página {currentGiftPage} de {giftPageCount}</span><button type="button" aria-label="Página anterior" disabled={currentGiftPage <= 1} onClick={() => setGiftPage(currentGiftPage - 1)} className="h-9 rounded-lg border border-[#E5DDCF] bg-white px-3 disabled:opacity-50">Anterior</button><button type="button" aria-label="Próxima página" disabled={currentGiftPage >= giftPageCount} onClick={() => setGiftPage(currentGiftPage + 1)} className="h-9 rounded-lg border border-[#E5DDCF] bg-white px-3 disabled:opacity-50">Próxima</button></div></div></div> : <p className="px-4 py-5 text-xs text-[#68645C]">Nenhum fechamento registrado.</p>}
+    </section>}
+
+    {activeVisitorTab === 'visitors' && <div id="visitors-panel" role="tabpanel" aria-labelledby="visitor-list-title" className="space-y-3">
     <section aria-labelledby="visitor-list-title" className="overflow-hidden rounded-xl border border-[#E5DDCF] bg-white shadow-[0_2px_7px_rgba(0,0,0,.025)]">
       <div className="grid gap-3 border-b border-[#F7F2E8] px-3 py-3 sm:grid-cols-[minmax(180px,1fr)_minmax(360px,1.6fr)] sm:items-center sm:px-4">
-        <div><h2 id="visitor-list-title" className="text-[13px] font-semibold">Visitantes Cadastrados</h2><p className="mt-0.5 text-xs text-[#68645C]">Registros de visita e cadastros recebidos</p></div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(160px,1fr)_120px_90px_140px]">
+        <div><h2 id="visitor-list-title" className="text-[13px] font-semibold">{visitorSource === 'qr' ? 'Visitantes que preencheram o QR Code' : 'Todos os visitantes cadastrados'}</h2><p className="mt-0.5 text-xs text-[#68645C]">Registros de visita e cadastros recebidos</p></div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(160px,1fr)_120px_90px_140px_140px]">
           <label className="relative col-span-2 block sm:col-span-1"><span className="sr-only">Buscar nome ou WhatsApp</span><Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#68645C]"/><input className="h-9 w-full rounded-lg border border-[#E5DDCF] bg-[#FBF9F4] pl-8 pr-2 text-xs outline-none focus:border-[#C2A35E]" type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Nome ou WhatsApp..."/></label>
           <label className="sr-only" htmlFor="visitor-month">Filtrar mês</label><select id="visitor-month" className="h-9 min-w-0 rounded-lg border border-[#E5DDCF] bg-white px-2 text-xs" value={month} onChange={event => setMonth(Number(event.target.value))}><option value={0}>Todos</option>{months.map((label, index) => <option key={label} value={index + 1}>{label}</option>)}</select>
           <label className="sr-only" htmlFor="visitor-year">Filtrar ano</label><select id="visitor-year" className="h-9 min-w-0 rounded-lg border border-[#E5DDCF] bg-white px-2 text-xs" value={year} onChange={event => setYear(Number(event.target.value))}><option value={0}>Todos</option>{availableYears.map(value => <option key={value}>{value}</option>)}</select>
           <label className="sr-only" htmlFor="visitor-service-day">Filtrar culto</label><select id="visitor-service-day" className="h-9 min-w-0 rounded-lg border border-[#E5DDCF] bg-white px-2 text-xs" value={serviceDay} onChange={event => setServiceDay(event.target.value as ServiceDayFilter)}><option value="all">Todos os cultos</option><option value="sunday">Domingo</option><option value="thursday">Quinta-feira</option></select>
+          <label className="sr-only" htmlFor="visitor-source">Filtrar origem do cadastro</label><select id="visitor-source" className="h-9 min-w-0 rounded-lg border border-[#E5DDCF] bg-white px-2 text-xs" value={visitorSource} onChange={event => setVisitorSource(event.target.value as VisitorSourceFilter)}><option value="qr">Preencheu QR Code</option><option value="all">Todos os cadastros</option></select>
         </div>
       </div>
 
       <div className="overflow-x-auto">
           <div className="min-w-[660px]">
           <div className="grid grid-cols-[minmax(140px,1.5fr)_minmax(95px,1fr)_minmax(86px,.9fr)_minmax(110px,1fr)_132px] gap-1.5 bg-[#FBF9F4] px-2 py-2 text-xs font-semibold uppercase tracking-wide text-[#68645C] sm:gap-2 sm:px-3"><span>Nome do visitante</span><span>WhatsApp</span><span>Culto registrado</span><span>Data e envio</span><span className="text-center">Ações</span></div>
-          {filteredPeople.map(person => {
-            const latestVisit = [...person.visits].filter(visit => {
-              const value = visit.visitedOn ?? visit.registeredAt
-              const date = new Date(value.length === 10 ? `${value}T12:00:00` : value)
-              return (month === 0 || date.getMonth() + 1 === month)
-                && (year === 0 || date.getFullYear() === year)
-                && matchesServiceDay(value, serviceDay)
-            }).sort((a, b) => b.registeredAt.localeCompare(a.registeredAt))[0]
+          {visiblePeople.map(person => {
+            const latestVisit = [...person.visits].filter(visit => visitorVisitMatchesFilters(visit, month, year, serviceDay) && (visitorSource === 'all' || visit.source === 'qr')).sort((a, b) => b.registeredAt.localeCompare(a.registeredAt))[0]
             return <article key={person.id} className="grid grid-cols-[minmax(140px,1.5fr)_minmax(95px,1fr)_minmax(86px,.9fr)_minmax(110px,1fr)_132px] items-center gap-1.5 border-t border-[#F7F2E8] px-2 py-2.5 sm:gap-2 sm:px-3">
               <div className="flex min-w-0 items-center gap-2"><span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#F0E6D2] text-[#8A6729]"><UserRound size={15}/></span><div className="min-w-0"><p className="truncate text-xs font-semibold">{person.fullName}</p><p className="truncate text-xs text-[#68645C]">{latestVisit?.source === 'qr' ? 'Formulário público' : 'Cadastro da equipe'}</p></div></div>
               <span className="text-xs text-[#6B4F1D]">{formatVisitorPhone(person.phoneNormalized)}</span>
@@ -352,8 +376,8 @@ export function VisitorsPage() {
               <div className="flex items-center justify-center gap-1"><button type="button" aria-label={`Ver detalhes de ${person.fullName}`} title="Ver detalhes e pedido de oração" onClick={() => setSelectedPerson(person)} className="grid size-8 place-items-center rounded-md bg-[#8A6729] text-white transition-colors hover:bg-[#6B4F1D]"><Eye size={15}/></button><button type="button" aria-label={`Adicionar informação para ${person.fullName}`} title="Adicionar informação" onClick={() => openNote(person)} className="grid size-7 place-items-center rounded-md bg-[#F0E6D2] text-[#68645C] hover:bg-[#F0E6D2]"><MessageSquare size={13}/></button><button type="button" aria-label={`Editar visitante ${person.fullName}`} title="Editar visitante" onClick={() => openEdit(person)} className="grid size-7 place-items-center rounded-md bg-[#F0E6D2] text-[#68645C] hover:bg-[#E8DCC4]"><Pencil size={13}/></button><button type="button" aria-label={`Excluir visitante ${person.fullName}`} title="Excluir visitante" onClick={() => { setVisitorDeleteError(''); setPersonToDelete(person) }} className="grid size-7 place-items-center rounded-md bg-[#FCE8E6] text-[#9C3F37] hover:bg-[#F8D7D4]"><Trash2 size={13}/></button></div>
             </article>
           })}
-          {filteredPeople.length === 0 && <div className="px-5 py-10 text-center text-xs text-[#68645C]">Nenhum visitante encontrado para os filtros selecionados.</div>}
-          <div className="flex items-center justify-between border-t border-[#F7F2E8] px-3 py-2 text-xs text-[#68645C] sm:px-4"><span>Exibindo {filteredPeople.length} de {people.length} pessoas cadastradas</span><span>Página 1 de 1</span></div>
+          {visiblePeople.length === 0 && <div className="px-5 py-10 text-center text-xs text-[#68645C]">Nenhum visitante encontrado para os filtros selecionados.</div>}
+          <div className="flex items-center justify-between border-t border-[#F7F2E8] px-3 py-2 text-xs text-[#68645C] sm:px-4"><span>Exibindo {visiblePeople.length} de {people.length} pessoas cadastradas</span><span>Página 1 de 1</span></div>
         </div>
       </div>
     </section>
@@ -362,6 +386,7 @@ export function VisitorsPage() {
       <h2 id="visitor-qr-title" className="sr-only">Formulário de visitantes</h2>
       <div className="mx-auto flex max-w-sm flex-col items-center py-2 text-center sm:py-3"><div className="grid size-[138px] place-items-center rounded-xl border border-[#E5DDCF] bg-white p-2 shadow-sm">{qrImage ? <img src={qrImage} alt="QR Code do formulário de visitantes" width={120} height={120}/> : <QrCode size={45} className="text-[#8A6729]"/>}</div><a className="mt-3 max-w-full break-all font-mono text-sm text-[#8A6729] underline underline-offset-2" href={visitorFormUrl} target="_blank" rel="noreferrer">{visitorFormUrl}</a><div className="mt-3 flex items-center gap-2"><Button type="button" variant="outline" size="sm" onClick={copyVisitorLink} className="h-9 rounded-lg bg-[#F0E6D2] px-3 text-sm"><ClipboardCopy size={14}/>{copied ? 'Link copiado' : 'Copiar link'}</Button><a className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#8A6729] px-3 text-sm font-medium text-white hover:bg-[#6B4F1D]" href={visitorFormUrl} target="_blank" rel="noreferrer">Abrir formulário <ExternalLinkIcon/></a></div></div>
     </section>
+    </div>}
 
     {showGiftReport && !showGiftReportConfirmation && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/40 p-4" onMouseDown={event => { if (event.target === event.currentTarget) setShowGiftReport(false) }}><section role="dialog" aria-modal="true" aria-labelledby="gift-report-form-title" className="my-auto w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"><div className="mb-5 flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[.14em] text-primary">Fechamento do culto</p><h2 id="gift-report-form-title" className="mt-1 text-lg font-semibold">Registrar mimos entregues</h2><p className="mt-1 text-xs text-muted">Informe quantos foram entregues neste culto.</p></div><button type="button" aria-label="Fechar formulário" onClick={() => setShowGiftReport(false)} className="rounded-lg p-2 text-muted hover:bg-[#F7F2E8]"><X size={17}/></button></div><form className="space-y-3" onSubmit={handleGiftReportSubmit}><label className="block text-xs font-medium">Dia do culto<input className="form-input mt-1.5 h-10 text-sm" type="date" required value={giftReportDate} onChange={event => setGiftReportDate(event.target.value)}/></label><label className="block text-xs font-medium">Culto<select className="form-input mt-1.5 h-10 text-sm" value={giftReportService} onChange={event => setGiftReportService(event.target.value)}>{services.slice(1).map(label => <option key={label}>{label}</option>)}</select></label><label className="block text-xs font-medium">Quantidade de mimos<input className="form-input mt-1.5 h-10 text-sm" type="number" min="0" max="1000" step="1" required value={giftReportQuantity} onChange={event => setGiftReportQuantity(event.target.value)}/></label><div className="rounded-lg bg-[#F7F2E8] px-3 py-2 text-xs text-[#34322E]">Líder responsável: <strong>{session?.user.email ?? 'Equipe de acolhimento'}</strong></div>{giftReportError && <p role="alert" className="status-negative rounded-lg border px-3 py-2 text-xs">{giftReportError}</p>}<p className="text-xs text-muted">O fechamento será associado à sua conta e ficará disponível à equipe autorizada.</p><div className="flex justify-end gap-2 pt-2"><Button type="button" variant="outline" size="sm" onClick={() => setShowGiftReport(false)}>Cancelar</Button><Button type="submit" size="sm"><Check size={14}/> Revisar fechamento</Button></div></form></section></div>}
 
