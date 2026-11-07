@@ -106,7 +106,14 @@ export function SchedulePage() {
     await load()
     const { data, error: notifyError } = await supabase.functions.invoke('notify-schedule-published', { body: { scheduleId: schedule.id } })
     setSaving(false)
-    if (notifyError) setNotice('Escala publicada. Não foi possível enviar os avisos agora; a equipe pode consultar a escala no sistema.')
+    if (notifyError) {
+      let detail = notifyError.message
+      if (notifyError.context instanceof Response) {
+        const responseBody = await notifyError.context.clone().json().catch(() => null) as { error?: string } | null
+        detail = `${notifyError.context.status}${responseBody?.error ? ` · ${responseBody.error}` : ''}`
+      }
+      setNotice(`Escala publicada, mas não foi possível enviar os avisos. Detalhe: ${detail}`)
+    }
     else if (!data?.configured) setNotice('Escala publicada. As notificações push precisam ser configuradas no Supabase.')
     else if (!data.sent) setNotice('Escala publicada. Nenhum voluntário atribuído ativou notificações neste dispositivo.')
     else setNotice(`Escala publicada e aviso enviado para ${data.sent} dispositivo(s).`)
