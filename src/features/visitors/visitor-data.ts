@@ -8,6 +8,7 @@ export type VisitorVisit = {
   source: VisitSource
   serviceLabel: string
   visitedOn?: string
+  contactConsent?: boolean
 }
 
 export type GiftDelivery = {

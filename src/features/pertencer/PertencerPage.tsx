@@ -4,9 +4,11 @@ import { useAuth } from '../../app/AuthProvider'
 import { supabase } from '../../lib/supabase'
 import { editableInvitationStatuses, invitationStatusLabels, invitationStatusTones, type InvitationStatus } from './invitation-status'
 
-type Invitation = { id: string; followUpId: string; name: string; phone: string; decision: string; decisionDate: string; confirmation: InvitationStatus; attended: boolean | null; nextStep: string }
-type Row = { id: string; attendance: InvitationStatus; confirmed_at: string | null; attendance_recorded_at: string | null; person: { full_name: string; phone_normalized: string } | { full_name: string; phone_normalized: string }[] | null; follow_up_id: string }
+type Invitation = { id: string; followUpId: string; name: string; phone: string; decision: string; decisionDate: string; confirmation: InvitationStatus; attended: boolean }
+type Row = { id: string; attendance: InvitationStatus; attended: boolean; confirmed_at: string | null; attendance_recorded_at: string | null; person: { full_name: string; phone_normalized: string } | { full_name: string; phone_normalized: string }[] | null; follow_up_id: string }
 type Event = { id: string; event_date: string; title: string }
+type HistoryGuest = { id: string; attendance: InvitationStatus; attended: boolean; name: string; phone: string }
+type HistoryEdition = Event & { guests: HistoryGuest[] }
 type Volunteer = { id: string; display_name: string }
 type AgendaRecord = { sequence: number; title: string; volunteer_id: string | null }
 const agendaItems = ['Oração inicial', 'Dinâmica', 'Saudação Breve', 'Apresentação da Igreja', 'Oração Final e explicar o projeto', 'Recepção', 'Mídia']
@@ -25,6 +27,9 @@ export function PertencerPage() {
   const isAdmin = role === 'admin'
   const [event, setEvent] = useState<Event | null>(null)
   const [invitations, setInvitations] = useState<Invitation[]>([])
+  const [historyEditions, setHistoryEditions] = useState<HistoryEdition[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState('')
   const [volunteers, setVolunteers] = useState<Volunteer[]>([])
   const [assignments, setAssignments] = useState<Record<number, string>>({})
   const [loading, setLoading] = useState(true)
@@ -35,6 +40,7 @@ export function PertencerPage() {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [savingStatusId, setSavingStatusId] = useState<string | null>(null)
+  const [savingCheckinId, setSavingCheckinId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('guests')
   const [volunteerName, setVolunteerName] = useState('')
   const [addingVolunteer, setAddingVolunteer] = useState(false)
@@ -51,7 +57,7 @@ export function PertencerPage() {
     const selectedEvent = (eventResult.data?.[0] as Event | undefined) ?? null
     setEvent(selectedEvent)
     if (!selectedEvent) { setInvitations([]); setLoading(false); return }
-    const inviteResult = await supabase.from('event_invitations').select('id,attendance,confirmed_at,attendance_recorded_at,follow_up_id,person:people!event_invitations_person_id_fkey(full_name,phone_normalized)').eq('event_id', selectedEvent.id).order('created_at', { ascending: false })
+    const inviteResult = await supabase.from('event_invitations').select('id,attendance,attended,confirmed_at,attendance_recorded_at,follow_up_id,person:people!event_invitations_person_id_fkey(full_name,phone_normalized)').eq('event_id', selectedEvent.id).order('created_at', { ascending: false })
     if (inviteResult.error) { setError('Não foi possível carregar os convidados.'); setInvitations([]); setLoading(false); return }
     const rows = (inviteResult.data ?? []) as unknown as Row[]
     const followUpIds = [...new Set(rows.map(row => row.follow_up_id).filter(Boolean))]
@@ -64,10 +70,28 @@ export function PertencerPage() {
       const person = Array.isArray(row.person) ? row.person[0] : row.person
       const followUp = followUpsById.get(row.follow_up_id)
       const decision = followUp ? decisionsById.get(followUp.decision_id) : undefined
-      const nextStep = followUp?.status === 'contact_made' || followUp?.status === 'responded' ? 'Acompanhamento iniciado' : 'Aguardando primeiro contato'
-      return { id: row.id, followUpId: row.follow_up_id, name: person?.full_name ?? 'Pessoa sem nome', phone: person?.phone_normalized ?? '', decision: decision?.decision_type === 'acceptance' ? 'Aceitação' : 'Reconciliação', decisionDate: decision?.decided_on ? formatDate(decision.decided_on) : '—', confirmation: row.attendance, attended: row.attendance === 'present' ? true : row.attendance === 'absent' ? false : null, nextStep }
+      return { id: row.id, followUpId: row.follow_up_id, name: person?.full_name ?? 'Pessoa sem nome', phone: person?.phone_normalized ?? '', decision: decision?.decision_type === 'acceptance' ? 'Aceitação' : 'Reconciliação', decisionDate: decision?.decided_on ? formatDate(decision.decided_on) : '—', confirmation: row.attendance, attended: row.attended }
     }))
     setLoading(false)
+  }, [session?.user.id])
+
+  const loadHistory = useCallback(async () => {
+    if (!supabase || !session?.user.id) { setHistoryError('Entre com uma conta autorizada para consultar o histórico.'); setHistoryLoading(false); return }
+    setHistoryLoading(true); setHistoryError('')
+    const editionsResult = await supabase.from('pertencer_events').select('id,event_date,title').lt('event_date', localDate()).order('event_date', { ascending: false })
+    if (editionsResult.error) { setHistoryError('Não foi possível carregar o histórico de cafés.'); setHistoryEditions([]); setHistoryLoading(false); return }
+    const editions = (editionsResult.data ?? []) as Event[]
+    if (!editions.length) { setHistoryEditions([]); setHistoryLoading(false); return }
+    const invitationsResult = await supabase.from('event_invitations').select('id,event_id,attendance,attended,person:people!event_invitations_person_id_fkey(full_name,phone_normalized)').in('event_id', editions.map(item => item.id)).order('created_at', { ascending: false })
+    if (invitationsResult.error) { setHistoryError('Não foi possível carregar os convidados das edições anteriores.'); setHistoryEditions([]); setHistoryLoading(false); return }
+    const guestRows = (invitationsResult.data ?? []) as unknown as Array<{ id: string; event_id: string; attendance: InvitationStatus; attended: boolean; person: { full_name: string; phone_normalized: string } | { full_name: string; phone_normalized: string }[] | null }>
+    const guestsByEvent = new Map<string, HistoryGuest[]>()
+    for (const row of guestRows) {
+      const person = Array.isArray(row.person) ? row.person[0] : row.person
+      guestsByEvent.set(row.event_id, [...(guestsByEvent.get(row.event_id) ?? []), { id: row.id, attendance: row.attendance, attended: row.attended, name: person?.full_name ?? 'Pessoa sem nome', phone: person?.phone_normalized ?? '' }])
+    }
+    setHistoryEditions(editions.map(item => ({ ...item, guests: guestsByEvent.get(item.id) ?? [] })))
+    setHistoryLoading(false)
   }, [session?.user.id])
 
   const loadAgenda = useCallback(async () => {
@@ -91,15 +115,16 @@ export function PertencerPage() {
 
   useEffect(() => { void loadEventAndGuests() }, [loadEventAndGuests])
   useEffect(() => { if (activeTab === 'agenda' && event) void loadAgenda() }, [activeTab, event, loadAgenda])
+  useEffect(() => { if (activeTab === 'history') void loadHistory() }, [activeTab, loadHistory])
 
-  const filtered = useMemo(() => invitations.filter(item => `${item.name} ${item.phone}`.toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR')) && (filter === 'all' || item.confirmation === filter)), [invitations, query, filter])
+  const filtered = useMemo(() => invitations.filter(item => `${item.name} ${item.phone}`.toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR')) && (filter === 'all' || (filter === 'present' ? item.attended : item.confirmation === filter))), [invitations, query, filter])
   const counts = {
     all: invitations.length,
     pending: invitations.filter(item => item.confirmation === 'pending').length,
     no_response: invitations.filter(item => item.confirmation === 'no_response').length,
-    declined: invitations.filter(item => item.confirmation === 'declined' || item.confirmation === 'absent').length,
+    declined: invitations.filter(item => item.confirmation === 'declined').length,
     confirmed: invitations.filter(item => item.confirmation === 'confirmed').length,
-    present: invitations.filter(item => item.confirmation === 'present').length,
+    present: invitations.filter(item => item.attended).length,
   }
   const tabs = [{ id: 'guests', label: 'Lista de convidados' }, { id: 'history', label: 'Histórico de cafés' }, { id: 'agenda', label: 'Roteiro do encontro' }]
 
@@ -115,6 +140,20 @@ export function PertencerPage() {
     if (updateError) { setError('Não foi possível atualizar o status do convite.'); return }
     setNotice('Status do convite atualizado.')
     await loadEventAndGuests()
+  }
+
+  async function updateCheckin(invitationId: string, attended: boolean) {
+    if (!supabase || !isAdmin) return
+    setSavingCheckinId(invitationId); setError(''); setNotice('')
+    const { error: updateError } = await supabase.rpc('set_pertencer_invitation_attendance', {
+      p_invitation_id: invitationId,
+      p_attended: attended,
+    })
+    setSavingCheckinId(null)
+    if (updateError) { setError('Não foi possível salvar a presença. Confira se a migration de check-in foi aplicada.'); return }
+    setNotice('Presença da edição atualizada.')
+    if (activeTab === 'history') await loadHistory()
+    else await loadEventAndGuests()
   }
 
   async function addVolunteer(event: FormEvent<HTMLFormElement>) {
@@ -168,7 +207,7 @@ export function PertencerPage() {
     {activeTab === 'guests' && <>
       <div className="flex flex-col gap-2 rounded-xl border border-[#E5DDCF] bg-white p-3 sm:flex-row sm:items-center sm:gap-3 sm:px-4"><div className="flex min-w-0 items-center gap-2 overflow-x-auto pb-1 text-xs"><span className="shrink-0 text-[#68645C]">Filtro rápido:</span>{(['all', ...editableInvitationStatuses] as Filter[]).map(value => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)} className={`shrink-0 rounded-full px-3 py-1.5 font-medium ${filter === value ? 'bg-[#EBDCBB] text-[#6B4F1D]' : 'bg-[#F7F2E8] text-[#68645C]'}`}>{value === 'all' ? `Todos (${counts.all})` : `${label[value]} (${counts[value]})`}</button>)}</div></div>
       <section className="overflow-hidden rounded-2xl border border-[#D9CCB2] bg-white shadow-[0_3px_14px_rgba(0,0,0,.035)]"><div className="border-b border-[#E5DDCF] p-3.5 sm:px-4"><label className="relative block w-full sm:max-w-[290px]"><span className="sr-only">Buscar por nome ou contato</span><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#68645C]"/><input className="h-10 w-full rounded-xl border border-[#D9CCB2] bg-white pl-9 pr-3 text-sm outline-none focus:border-[#C2A35E]" value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar por nome ou contato..."/></label></div>
-        <div className="overflow-x-auto"><table className="w-full min-w-[850px] border-collapse text-left text-sm"><thead className="bg-[#F7F2E8] text-xs font-semibold text-[#34322E]"><tr><th className="px-4 py-3">Nome do convidado</th><th className="px-3 py-3">Decisão e data</th><th className="px-3 py-3">Status do convite</th><th className="px-3 py-3">Check-in</th><th className="px-4 py-3">Próximo passo</th></tr></thead><tbody>{filtered.map(item => <tr key={item.id} className="border-t border-[#E5DDCF] align-middle"><td className="px-4 py-3"><p className="font-semibold">{item.name}</p><p className="mt-0.5 text-xs text-[#68645C]">{item.phone}</p></td><td className="px-3 py-3"><span className="font-medium text-[#8A6729]">{item.decision}</span><p className="mt-0.5 text-xs text-[#68645C]">{item.decisionDate}</p></td><td className="px-3 py-3">{isAdmin ? <select aria-label={`Status do convite de ${item.name}`} value={item.confirmation} disabled={savingStatusId === item.id} onChange={e => { if (e.target.value !== 'absent') void updateInvitationStatus(item, e.target.value as Exclude<InvitationStatus, 'absent'>) }} className={`h-9 max-w-[190px] rounded-lg border px-2 text-xs font-medium ${tone[item.confirmation]} disabled:opacity-60`}><option value="absent" disabled>{label.absent} (histórico)</option>{editableInvitationStatuses.map(status => <option key={status} value={status}>{label[status]}</option>)}</select> : <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${tone[item.confirmation]}`}>{label[item.confirmation]}</span>}</td><td className="px-3 py-3">{item.attended === true ? <span className="status-positive inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs"><CheckCircle2 size={15}/>Compareceu</span> : item.attended === false ? <span className="status-negative inline-flex rounded-full border px-2.5 py-1 text-xs">Não foi</span> : <span className="status-pending inline-flex rounded-full border px-2.5 py-1 text-xs">Aguardando</span>}</td><td className="px-4 py-3"><span className="text-xs text-[#34322E]">{item.nextStep}</span></td></tr>)}</tbody></table>{loading ? <p className="px-5 py-10 text-center text-sm text-[#68645C]">Carregando dados...</p> : filtered.length === 0 && <p className="px-5 py-10 text-center text-sm text-[#68645C]">Nenhum convite encontrado para esta edição.</p>}</div>
+        <div className="overflow-x-auto"><table className="w-full min-w-[760px] border-collapse text-left text-sm"><thead className="bg-[#F7F2E8] text-xs font-semibold text-[#34322E]"><tr><th className="px-4 py-3">Nome do convidado</th><th className="px-3 py-3">Decisão e data</th><th className="px-3 py-3">Status do convite</th><th className="px-3 py-3">Check-in</th></tr></thead><tbody>{filtered.map(item => <tr key={item.id} className="border-t border-[#E5DDCF] align-middle"><td className="px-4 py-3"><p className="font-semibold">{item.name}</p><p className="mt-0.5 text-xs text-[#68645C]">{item.phone}</p></td><td className="px-3 py-3"><span className="font-medium text-[#8A6729]">{item.decision}</span><p className="mt-0.5 text-xs text-[#68645C]">{item.decisionDate}</p></td><td className="px-3 py-3">{isAdmin ? <select aria-label={`Status do convite de ${item.name}`} value={item.confirmation} disabled={savingStatusId === item.id} onChange={e => { if (e.target.value !== 'absent') void updateInvitationStatus(item, e.target.value as Exclude<InvitationStatus, 'absent'>) }} className={`h-9 max-w-[190px] rounded-lg border px-2 text-xs font-medium ${tone[item.confirmation]} disabled:opacity-60`}><option value="absent" disabled>{label.absent} (histórico)</option>{editableInvitationStatuses.map(status => <option key={status} value={status}>{label[status]}</option>)}</select> : <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${tone[item.confirmation]}`}>{label[item.confirmation]}</span>}</td><td className="px-3 py-3">{isAdmin ? <select aria-label={`Check-in de ${item.name}`} value={item.attended ? 'true' : 'false'} disabled={savingCheckinId === item.id} onChange={e => void updateCheckin(item.id, e.target.value === 'true')} className={`h-9 rounded-lg border px-2 text-xs font-medium ${item.attended ? 'status-positive' : 'status-negative'} disabled:opacity-60`}><option value="true">Veio</option><option value="false">Não veio</option></select> : item.attended ? <span className="status-positive inline-flex rounded-full border px-2.5 py-1 text-xs">Veio</span> : <span className="status-negative inline-flex rounded-full border px-2.5 py-1 text-xs">Não veio</span>}</td></tr>)}</tbody></table>{loading ? <p className="px-5 py-10 text-center text-sm text-[#68645C]">Carregando dados...</p> : filtered.length === 0 && <p className="px-5 py-10 text-center text-sm text-[#68645C]">Nenhum convite encontrado para esta edição.</p>}</div>
         <div className="border-t border-[#E5DDCF] bg-[#FBF9F4] px-4 py-3 text-xs text-[#68645C]">Exibindo {filtered.length} de {invitations.length} convidados</div></section>
     </>}
 
@@ -184,6 +223,6 @@ export function PertencerPage() {
       </>}
     </section>}
 
-    {activeTab === 'history' && <section className="empty-panel min-h-[260px]"><span className="empty-icon"><ClipboardList size={22}/></span><h2 className="mt-4 text-lg font-semibold">{tabs.find(tab => tab.id === activeTab)?.label}</h2><p className="mt-2 max-w-md text-sm leading-6 text-[#68645C]">Esta seção será implementada em uma próxima etapa.</p></section>}
+    {activeTab === 'history' && <section className="space-y-4">{historyError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{historyError}</p>}{historyLoading ? <p role="status" className="rounded-xl border border-[#E5DDCF] bg-white p-6 text-center text-sm text-[#68645C]">Carregando histórico de cafés...</p> : historyEditions.length ? historyEditions.map(edition => <article key={edition.id} className="overflow-hidden rounded-2xl border border-[#D9CCB2] bg-white shadow-[0_3px_14px_rgba(0,0,0,.035)]"><header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E5DDCF] bg-[#FBF9F4] px-4 py-3"><div><p className="text-xs font-medium text-[#8A6729]">{edition.title}</p><h2 className="mt-1 font-semibold">Café de {formatDate(edition.event_date)}</h2></div><span className="rounded-full bg-[#F0E6D2] px-3 py-1 text-xs text-[#68645C]">{edition.guests.length} convidado(s)</span></header>{edition.guests.length ? <div className="overflow-x-auto"><table className="w-full min-w-[560px] border-collapse text-left text-sm"><thead className="bg-white text-xs font-semibold text-[#34322E]"><tr><th className="px-4 py-3">Convidado</th><th className="px-3 py-3">Status do convite</th><th className="px-3 py-3">Presença</th></tr></thead><tbody>{edition.guests.map(guest => <tr key={guest.id} className="border-t border-[#E5DDCF]"><td className="px-4 py-3"><p className="font-semibold">{guest.name}</p><p className="mt-0.5 text-xs text-[#68645C]">{guest.phone}</p></td><td className="px-3 py-3"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${tone[guest.attendance]}`}>{label[guest.attendance]}</span></td><td className="px-3 py-3">{isAdmin ? <select aria-label={`Presença de ${guest.name} em ${edition.title}`} value={guest.attended ? 'true' : 'false'} disabled={savingCheckinId === guest.id} onChange={e => void updateCheckin(guest.id, e.target.value === 'true')} className={`h-9 rounded-lg border px-2 text-xs font-medium ${guest.attended ? 'status-positive' : 'status-negative'} disabled:opacity-60`}><option value="true">Veio</option><option value="false">Não veio</option></select> : guest.attended ? <span className="status-positive inline-flex rounded-full border px-2.5 py-1 text-xs">Veio</span> : <span className="status-negative inline-flex rounded-full border px-2.5 py-1 text-xs">Não veio</span>}</td></tr>)}</tbody></table></div> : <p className="px-4 py-6 text-center text-sm text-[#68645C]">Nenhum convidado foi associado a esta edição.</p>}</article>) : <section className="empty-panel min-h-[260px]"><span className="empty-icon"><ClipboardList size={22}/></span><h2 className="mt-4 text-lg font-semibold">Histórico de cafés</h2><p className="mt-2 max-w-md text-sm leading-6 text-[#68645C]">As edições anteriores aparecerão aqui automaticamente a partir do dia seguinte ao café, com seus convidados e presenças.</p></section>}</section>}
   </div>
 }
