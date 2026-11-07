@@ -1,4 +1,5 @@
 import { normalizeBrazilianPhone, normalizeVisitorName } from '../../../supabase/functions/_shared/visitor-validation.ts'
+import { matchesServiceDay, type ServiceDayFilter } from '../../lib/service-day'
 
 export type VisitSource = 'qr' | 'staff'
 
@@ -138,7 +139,7 @@ export function visitorHasVisitInPeriod(person: VisitorPerson, month: number, ye
   })
 }
 
-export function filterVisitors(people: VisitorPerson[], query: string, month: number, year: number, serviceLabel?: string): VisitorPerson[] {
+export function filterVisitors(people: VisitorPerson[], query: string, month: number, year: number, serviceLabel?: string, serviceDay: ServiceDayFilter = 'all'): VisitorPerson[] {
   const normalizedQuery = query.trim().toLocaleLowerCase('pt-BR')
   const digits = query.replace(/\D/g, '')
 
@@ -148,6 +149,7 @@ export function filterVisitors(people: VisitorPerson[], query: string, month: nu
       return (month === 0 || date.getMonth() + 1 === month)
         && (year === 0 || date.getFullYear() === year)
         && (!serviceLabel || visitService === serviceLabel)
+        && matchesServiceDay(visitedOn ?? registeredAt, serviceDay)
     })
     if (!hasMatchingVisit) return false
     if (!normalizedQuery) return true

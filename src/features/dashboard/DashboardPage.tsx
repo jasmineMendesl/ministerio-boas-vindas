@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { CalendarDays, ChartNoAxesCombined, Coffee, HeartHandshake, UsersRound } from 'lucide-react'
 import { useAuth } from '../../app/AuthProvider'
 import { supabase } from '../../lib/supabase'
+import { getServiceDay } from '../../lib/service-day'
 
-type Stats = { visitorsThisMonth: number; decisionsThisMonth: number; awaitingContact: number; invitations: number; nextEvent: string }
-const emptyStats: Stats = { visitorsThisMonth: 0, decisionsThisMonth: 0, awaitingContact: 0, invitations: 0, nextEvent: '' }
+type Stats = { visitorsThisMonth: number; decisionsThisMonth: number; awaitingContact: number; invitations: number; nextEvent: string; sundayVisitors: number; thursdayVisitors: number; sundayAcceptances: number; thursdayAcceptances: number; comparisonYear: number }
+const emptyStats: Stats = { visitorsThisMonth: 0, decisionsThisMonth: 0, awaitingContact: 0, invitations: 0, nextEvent: '', sundayVisitors: 0, thursdayVisitors: 0, sundayAcceptances: 0, thursdayAcceptances: 0, comparisonYear: new Date().getFullYear() }
 const scheduleRoleNames: Record<string, string> = { leader: 'Líder', support: 'Apoio', confession_prayer: 'Oração de Confissão', reconciliation_word: 'Palavra de reconciliação', seat_direction: 'Direcionar os irmãos para os lugares vagos', opening_prayer: 'Oração Inicial', closing_prayer: 'Oração Final' }
 
 function SummaryCard({ icon: Icon, title, value, subtitle }: { icon: typeof UsersRound; title: string; value: number | string; subtitle: string }) {
@@ -28,11 +29,16 @@ export function DashboardPage() {
       const dateOnly = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
       const firstDay = dateOnly(new Date(now.getFullYear(), now.getMonth(), 1))
       const today = dateOnly(now)
-      const [visitors, decisions, followUps, event] = await Promise.all([
+      const comparisonYear = now.getFullYear()
+      const yearStart = `${comparisonYear}-01-01`
+      const nextYearStart = `${comparisonYear + 1}-01-01`
+      const [visitors, decisions, followUps, event, visitorDays, acceptanceDays] = await Promise.all([
         supabase.from('visitors').select('id', { count: 'exact', head: true }).gte('visited_on', firstDay),
         supabase.from('decisions').select('id', { count: 'exact', head: true }).gte('decided_on', firstDay),
         supabase.from('follow_ups').select('id', { count: 'exact', head: true }).eq('status', 'awaiting_first_contact'),
         supabase.from('pertencer_events').select('id,event_date').gte('event_date', today).order('event_date', { ascending: true }).limit(1),
+        supabase.from('visitors').select('visited_on').gte('visited_on', yearStart).lt('visited_on', nextYearStart),
+        supabase.from('decisions').select('decided_on').eq('decision_type', 'acceptance').gte('decided_on', yearStart).lt('decided_on', nextYearStart),
       ])
       if (!active) return
       const assignmentsResult = await supabase.from('ministry_schedule_assignments').select('schedule_id,ministry_role').eq('volunteer_profile_id', session.user.id)
@@ -51,7 +57,7 @@ export function DashboardPage() {
           }
         } else setPersonalAssignments([])
       }
-      const failed = visitors.error || decisions.error || followUps.error || event.error
+      const failed = visitors.error || decisions.error || followUps.error || event.error || visitorDays.error || acceptanceDays.error
       if (failed) { setError('Não foi possível carregar todos os indicadores. Verifique a conexão e as permissões.'); setStats(emptyStats) }
       else {
         const upcoming = event.data?.[0]
@@ -62,7 +68,18 @@ export function DashboardPage() {
           else invitations = result.count ?? 0
         }
         if (!active) return
-        setStats({ visitorsThisMonth: visitors.count ?? 0, decisionsThisMonth: decisions.count ?? 0, awaitingContact: followUps.count ?? 0, invitations, nextEvent: upcoming?.event_date ?? '' })
+        setStats({
+          visitorsThisMonth: visitors.count ?? 0,
+          decisionsThisMonth: decisions.count ?? 0,
+          awaitingContact: followUps.count ?? 0,
+          invitations,
+          nextEvent: upcoming?.event_date ?? '',
+          sundayVisitors: (visitorDays.data ?? []).filter(row => getServiceDay(row.visited_on) === 'sunday').length,
+          thursdayVisitors: (visitorDays.data ?? []).filter(row => getServiceDay(row.visited_on) === 'thursday').length,
+          sundayAcceptances: (acceptanceDays.data ?? []).filter(row => getServiceDay(row.decided_on) === 'sunday').length,
+          thursdayAcceptances: (acceptanceDays.data ?? []).filter(row => getServiceDay(row.decided_on) === 'thursday').length,
+          comparisonYear,
+        })
       }
       setLoading(false)
     }
@@ -81,6 +98,7 @@ export function DashboardPage() {
       <SummaryCard icon={CalendarDays} title="Aguardando primeiro contato" value={stats.awaitingContact} subtitle="Pendências de acompanhamento"/>
       <SummaryCard icon={Coffee} title="Convidados na próxima edição" value={stats.invitations} subtitle={stats.nextEvent ? `Edição em ${new Date(`${stats.nextEvent}T12:00:00`).toLocaleDateString('pt-BR')}` : 'Nenhuma edição futura cadastrada'}/>
     </section>
+    {!loading && !error && <section aria-label="Comparativo de visitas e aceitações por culto" className="space-y-3 rounded-2xl border border-[#E5DDCF] bg-white p-4 shadow-[0_3px_12px_rgba(0,0,0,.035)] sm:p-5"><div><h2 className="text-base font-semibold">Domingo x Quinta-feira</h2><p className="mt-1 text-xs text-[#68645C]">Comparativo de visitas e aceitações em {stats.comparisonYear}. Domingo soma os cultos das 10h e 18h.</p></div><div className="grid gap-3 sm:grid-cols-2"><article className="rounded-xl border border-[#E5DDCF] bg-[#FBF9F4] p-4"><h3 className="font-semibold">Domingo</h3><div className="mt-3 grid grid-cols-2 gap-3"><div><p className="text-xs text-[#68645C]">Visitantes</p><p className="mt-1 text-2xl font-semibold">{stats.sundayVisitors}</p></div><div><p className="text-xs text-[#68645C]">Aceitações</p><p className="mt-1 text-2xl font-semibold">{stats.sundayAcceptances}</p></div></div></article><article className="rounded-xl border border-[#E5DDCF] bg-[#FBF9F4] p-4"><h3 className="font-semibold">Quinta-feira · 19h15</h3><div className="mt-3 grid grid-cols-2 gap-3"><div><p className="text-xs text-[#68645C]">Visitantes</p><p className="mt-1 text-2xl font-semibold">{stats.thursdayVisitors}</p></div><div><p className="text-xs text-[#68645C]">Aceitações</p><p className="mt-1 text-2xl font-semibold">{stats.thursdayAcceptances}</p></div></div></article></div></section>}
     {!loading && !error && <p className="text-xs text-[#68645C]">Indicadores consultados com sua conta e filtrados pelas permissões do perfil.</p>}
   </div>
 }

@@ -7,6 +7,7 @@ import { useAuth } from '../../app/AuthProvider'
 import { supabase } from '../../lib/supabase'
 import { buildPublicVisitorUrl, filterVisitors, firstVisit, formatVisitorPhone, type VisitorPerson } from './visitor-data'
 import { isValidPrayerRequest, isValidServiceDate, normalizeBrazilianPhone, normalizePrayerRequest, normalizeVisitorName } from '../../../supabase/functions/_shared/visitor-validation'
+import { matchesServiceDay, type ServiceDayFilter } from '../../lib/service-day'
 
 const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const services = ['Todos os cultos', 'Domingo às 10h', 'Domingo às 18h', 'Quinta às 19h15']
@@ -32,6 +33,7 @@ export function VisitorsPage() {
   const [search, setSearch] = useState('')
   const [month, setMonth] = useState(new Date().getMonth() + 1)
   const [year, setYear] = useState(new Date().getFullYear())
+  const [serviceDay, setServiceDay] = useState<ServiceDayFilter>('all')
   const [showManualForm, setShowManualForm] = useState(false)
   const [manualName, setManualName] = useState('')
   const [manualPhone, setManualPhone] = useState('')
@@ -72,7 +74,7 @@ export function VisitorsPage() {
 
   const today = new Date()
   const visitorFormUrl = useMemo(() => buildPublicVisitorUrl(window.location.origin, import.meta.env.BASE_URL), [])
-  const filteredPeople = filterVisitors(people, search, month, year)
+  const filteredPeople = filterVisitors(people, search, month, year, undefined, serviceDay)
   const bookmarksDelivered = giftReports.reduce((total, report) => total + report.giftsDelivered, 0)
   const qrRegistrations = people.filter(person => person.visits.some(visit => visit.source === 'qr')).length
   const fillRate = people.length ? Math.round((people.filter(person => person.gifts.length > 0).length / people.length) * 100) : 0
@@ -322,10 +324,11 @@ export function VisitorsPage() {
     <section aria-labelledby="visitor-list-title" className="overflow-hidden rounded-xl border border-[#E5DDCF] bg-white shadow-[0_2px_7px_rgba(0,0,0,.025)]">
       <div className="grid gap-3 border-b border-[#F7F2E8] px-3 py-3 sm:grid-cols-[minmax(180px,1fr)_minmax(360px,1.6fr)] sm:items-center sm:px-4">
         <div><h2 id="visitor-list-title" className="text-[13px] font-semibold">Visitantes Cadastrados</h2><p className="mt-0.5 text-xs text-[#68645C]">Registros de visita e cadastros recebidos</p></div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(160px,1fr)_120px_90px]">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(160px,1fr)_120px_90px_140px]">
           <label className="relative col-span-2 block sm:col-span-1"><span className="sr-only">Buscar nome ou WhatsApp</span><Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#68645C]"/><input className="h-9 w-full rounded-lg border border-[#E5DDCF] bg-[#FBF9F4] pl-8 pr-2 text-xs outline-none focus:border-[#C2A35E]" type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Nome ou WhatsApp..."/></label>
           <label className="sr-only" htmlFor="visitor-month">Filtrar mês</label><select id="visitor-month" className="h-9 min-w-0 rounded-lg border border-[#E5DDCF] bg-white px-2 text-xs" value={month} onChange={event => setMonth(Number(event.target.value))}><option value={0}>Todos</option>{months.map((label, index) => <option key={label} value={index + 1}>{label}</option>)}</select>
           <label className="sr-only" htmlFor="visitor-year">Filtrar ano</label><select id="visitor-year" className="h-9 min-w-0 rounded-lg border border-[#E5DDCF] bg-white px-2 text-xs" value={year} onChange={event => setYear(Number(event.target.value))}><option value={0}>Todos</option>{availableYears.map(value => <option key={value}>{value}</option>)}</select>
+          <label className="sr-only" htmlFor="visitor-service-day">Filtrar culto</label><select id="visitor-service-day" className="h-9 min-w-0 rounded-lg border border-[#E5DDCF] bg-white px-2 text-xs" value={serviceDay} onChange={event => setServiceDay(event.target.value as ServiceDayFilter)}><option value="all">Todos os cultos</option><option value="sunday">Domingo</option><option value="thursday">Quinta-feira</option></select>
         </div>
       </div>
 
@@ -333,7 +336,13 @@ export function VisitorsPage() {
           <div className="min-w-[660px]">
           <div className="grid grid-cols-[minmax(140px,1.5fr)_minmax(95px,1fr)_minmax(86px,.9fr)_minmax(110px,1fr)_132px] gap-1.5 bg-[#FBF9F4] px-2 py-2 text-xs font-semibold uppercase tracking-wide text-[#68645C] sm:gap-2 sm:px-3"><span>Nome do visitante</span><span>WhatsApp</span><span>Culto registrado</span><span>Data e envio</span><span className="text-center">Ações</span></div>
           {filteredPeople.map(person => {
-            const latestVisit = [...person.visits].sort((a, b) => b.registeredAt.localeCompare(a.registeredAt))[0]
+            const latestVisit = [...person.visits].filter(visit => {
+              const value = visit.visitedOn ?? visit.registeredAt
+              const date = new Date(value.length === 10 ? `${value}T12:00:00` : value)
+              return (month === 0 || date.getMonth() + 1 === month)
+                && (year === 0 || date.getFullYear() === year)
+                && matchesServiceDay(value, serviceDay)
+            }).sort((a, b) => b.registeredAt.localeCompare(a.registeredAt))[0]
             return <article key={person.id} className="grid grid-cols-[minmax(140px,1.5fr)_minmax(95px,1fr)_minmax(86px,.9fr)_minmax(110px,1fr)_132px] items-center gap-1.5 border-t border-[#F7F2E8] px-2 py-2.5 sm:gap-2 sm:px-3">
               <div className="flex min-w-0 items-center gap-2"><span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#F0E6D2] text-[#8A6729]"><UserRound size={15}/></span><div className="min-w-0"><p className="truncate text-xs font-semibold">{person.fullName}</p><p className="truncate text-xs text-[#68645C]">{latestVisit?.source === 'qr' ? 'Formulário público' : 'Cadastro da equipe'}</p></div></div>
               <span className="text-xs text-[#6B4F1D]">{formatVisitorPhone(person.phoneNormalized)}</span>

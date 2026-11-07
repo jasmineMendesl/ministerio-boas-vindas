@@ -6,6 +6,7 @@ import { addDecision, type DecisionRecord, type DecisionType } from './decision-
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../app/AuthProvider'
 import { editableInvitationStatuses, followUpToInvitationStatus, invitationStatusLabels, invitationStatusTones, invitationToFollowUpStatus, type InvitationStatus } from '../pertencer/invitation-status'
+import { matchesServiceDay, type ServiceDayFilter } from '../../lib/service-day'
 
 const decisionLabels: Record<DecisionType, string> = { acceptance: 'Aceitação de Jesus', reconciliation: 'Reconciliação' }
 const formatDate = (date: string) => new Date(`${date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { dateStyle: 'medium' })
@@ -102,7 +103,15 @@ export function DecisionsPage() {
   const { role } = useAuth()
   const navigate = useNavigate()
   const [savingStatusId, setSavingStatusId] = useState<string | null>(null)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [serviceDay, setServiceDay] = useState<ServiceDayFilter>('all')
   const recent = useMemo(() => [...records].sort((a, b) => b.decidedOn.localeCompare(a.decidedOn)), [records])
+  const filteredRecords = useMemo(() => recent.filter(record =>
+    (!dateFrom || record.decidedOn >= dateFrom)
+      && (!dateTo || record.decidedOn <= dateTo)
+      && matchesServiceDay(record.decidedOn, serviceDay),
+  ), [recent, dateFrom, dateTo, serviceDay])
   const currentYear = new Date().getFullYear()
   const yearRecords = records.filter(record => Number(record.decidedOn.slice(0, 4)) === currentYear)
   const currentMonthRecords = yearRecords.filter(record => Number(record.decidedOn.slice(5, 7)) === new Date().getMonth() + 1)
@@ -148,18 +157,24 @@ export function DecisionsPage() {
 
 
 
+    <section aria-label="Filtros de decisões por período e culto" className="grid gap-3 rounded-2xl border border-[#E5DDCF] bg-white p-3.5 sm:grid-cols-[1fr_1fr_1fr] sm:items-end sm:p-4">
+      <label className="block text-xs font-medium text-[#68645C]">Data inicial<input aria-label="Data inicial das decisões" type="date" className="form-input mt-1.5 h-10 text-sm" value={dateFrom} max={dateTo || undefined} onChange={event => setDateFrom(event.target.value)}/></label>
+      <label className="block text-xs font-medium text-[#68645C]">Data final<input aria-label="Data final das decisões" type="date" className="form-input mt-1.5 h-10 text-sm" value={dateTo} min={dateFrom || undefined} onChange={event => setDateTo(event.target.value)}/></label>
+      <label className="block text-xs font-medium text-[#68645C]">Culto<select aria-label="Filtrar decisões por culto" className="form-input mt-1.5 h-10 text-sm" value={serviceDay} onChange={event => setServiceDay(event.target.value as ServiceDayFilter)}><option value="all">Todos os cultos</option><option value="sunday">Domingo (10h e 18h)</option><option value="thursday">Quinta-feira (19h15)</option></select></label>
+    </section>
+
     <div>
       <section aria-labelledby="recent-decisions-title" className="min-w-0">
-        <div className="mb-2.5 flex flex-col items-start justify-between gap-1 sm:flex-row sm:items-center sm:gap-3"><h2 id="recent-decisions-title" className="text-sm font-semibold">Decisões Registradas Recentemente</h2><span className="text-xs text-[#68645C]">Mostrando {recent.length} de {records.length}</span></div>
+        <div className="mb-2.5 flex flex-col items-start justify-between gap-1 sm:flex-row sm:items-center sm:gap-3"><h2 id="recent-decisions-title" className="text-sm font-semibold">Decisões Registradas</h2><span className="text-xs text-[#68645C]">Mostrando {filteredRecords.length} de {records.length}</span></div>
         <div className="space-y-2.5">
-          {recent.map(record => <article key={record.id} className="min-w-0 rounded-2xl border border-[#E5DDCF] bg-white p-4 shadow-[0_4px_14px_rgba(0,0,0,.035)] sm:p-5">
+          {filteredRecords.map(record => <article key={record.id} className="min-w-0 rounded-2xl border border-[#E5DDCF] bg-white p-4 shadow-[0_4px_14px_rgba(0,0,0,.035)] sm:p-5">
             <div className="flex min-w-0 items-start gap-2.5"><span className={`grid size-9 shrink-0 place-items-center rounded-xl text-xs font-semibold ${record.type === 'acceptance' ? 'bg-[#F0E6D2] text-[#8A6729]' : 'bg-[#F0E6D2] text-[#B08A3E]'}`}>{initials(record.personName)}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-1.5"><span className="break-words text-left text-sm font-semibold text-[#161616]">{record.personName}</span><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${record.type === 'acceptance' ? 'bg-[#F0E6D2] text-[#8A6729]' : 'bg-[#F0E6D2] text-[#B08A3E]'}`}>{decisionLabels[record.type]}</span></div><div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#68645C]"><span className="inline-flex items-center gap-1"><CalendarDays size={12}/>{record.type === 'acceptance' ? 'Aceitou' : 'Reconciliação'} em {formatDate(record.decidedOn)}</span><span className="inline-flex items-center gap-1"><MessageCircle size={12}/>{formatPhone(record.phoneNormalized)}</span></div></div></div>
             <label className="mt-3 block text-xs font-medium text-[#68645C]">Status do convite<select aria-label={`Status do convite de ${record.personName}`} disabled={role !== 'admin' || !record.followUp.id || savingStatusId === record.followUp.id} value={record.invitationStatus ?? followUpToInvitationStatus(record.followUp.status)} onChange={event => void updateInvitationStatus(record, event.target.value as InvitationStatus)} className={`mt-1.5 h-10 w-full rounded-lg border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-75 ${invitationStatusTones[record.invitationStatus ?? followUpToInvitationStatus(record.followUp.status)]}`}><option value="absent" disabled>{invitationStatusLabels.absent} (histórico)</option>{editableInvitationStatuses.map(status => <option key={status} value={status}>{invitationStatusLabels[status]}</option>)}</select></label>
             <div className="mt-2.5 grid gap-2 rounded-xl border border-[#F7F2E8] bg-[#F7F2E8] p-2.5 sm:grid-cols-2"><div><p className="text-xs text-[#68645C]">Batismo nas águas</p><p className="mt-1 inline-flex items-center gap-1 text-xs font-medium"><span className="text-[#B08A3E]">◉</span>{record.baptized ? 'Já batizada' : 'Ainda não batizada'}</p></div><div><p className="text-xs text-[#68645C]">Interesse em se batizar</p><p className="mt-1 inline-flex items-center gap-1 text-xs font-medium"><span className="text-[#B08A3E]">◉</span>{record.interestedInBaptism ? 'Sim, tem interesse' : 'Não no momento'}</p></div><div className="sm:col-span-2"><p className="text-xs text-[#68645C]">Registrado por</p><p className="mt-1 text-xs font-medium">{record.welcomedBy}</p></div></div>
             {record.observations && <p className="mt-2 text-xs leading-4 text-[#68645C]">{record.observations}</p>}
             <div className="mt-3"><a href={`https://wa.me/${record.phoneNormalized.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" aria-label={`Abrir conversa no WhatsApp com ${record.personName}`} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#8A6729] px-3 text-sm font-medium text-white hover:bg-[#6B4F1D] sm:w-auto"><MessageCircle size={15}/> WhatsApp</a></div>
           </article>)}
-          {recent.length === 0 && <div className="rounded-2xl border border-dashed border-[#E5DDCF] bg-white px-5 py-10 text-center"><span className="mx-auto grid size-11 place-items-center rounded-xl bg-[#F0E6D2] text-[#8A6729]"><Search size={17}/></span><h3 className="mt-3 text-sm font-semibold">Nenhuma decisão encontrada</h3><p className="mt-1 text-xs text-[#68645C]">Nenhuma decisão registrada.</p></div>}
+          {filteredRecords.length === 0 && <div className="rounded-2xl border border-dashed border-[#E5DDCF] bg-white px-5 py-10 text-center"><span className="mx-auto grid size-11 place-items-center rounded-xl bg-[#F0E6D2] text-[#8A6729]"><Search size={17}/></span><h3 className="mt-3 text-sm font-semibold">Nenhuma decisão encontrada</h3><p className="mt-1 text-xs text-[#68645C]">Ajuste o período ou selecione outro culto.</p></div>}
         </div>
       </section>
 
