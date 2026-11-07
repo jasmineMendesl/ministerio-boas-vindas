@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { CalendarDays, CheckCircle2, Coffee, Search, UsersRound, XCircle, Clock3, Save, UserPlus, ClipboardList } from 'lucide-react'
+import { CalendarDays, CheckCircle2, Coffee, Search, UsersRound, XCircle, Clock3, Save, ClipboardList } from 'lucide-react'
 import { useAuth } from '../../app/AuthProvider'
 import { supabase } from '../../lib/supabase'
 import { editableInvitationStatuses, invitationStatusLabels, invitationStatusTones, type InvitationStatus } from './invitation-status'
@@ -10,7 +10,7 @@ type Event = { id: string; event_date: string; title: string }
 type HistoryGuest = { id: string; attendance: InvitationStatus; attended: boolean; name: string; phone: string }
 type HistoryEdition = Event & { guests: HistoryGuest[] }
 type Volunteer = { id: string; display_name: string }
-type AgendaRecord = { sequence: number; title: string; volunteer_id: string | null }
+type AgendaRecord = { sequence: number; title: string; volunteer_profile_id: string | null }
 const agendaItems = ['Oração inicial', 'Dinâmica', 'Saudação Breve', 'Apresentação da Igreja', 'Oração Final e explicar o projeto', 'Recepção', 'Mídia']
 const label = invitationStatusLabels
 const tone = invitationStatusTones
@@ -42,8 +42,6 @@ export function PertencerPage() {
   const [savingStatusId, setSavingStatusId] = useState<string | null>(null)
   const [savingCheckinId, setSavingCheckinId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('guests')
-  const [volunteerName, setVolunteerName] = useState('')
-  const [addingVolunteer, setAddingVolunteer] = useState(false)
   const [newEventDate, setNewEventDate] = useState('')
   const [newEventTitle, setNewEventTitle] = useState('Projeto Pertencer')
   const [creatingEvent, setCreatingEvent] = useState(false)
@@ -98,17 +96,17 @@ export function PertencerPage() {
     if (!supabase || !session?.user.id || !event) return
     setAgendaLoading(true)
     const [volunteerResult, agendaResult] = await Promise.all([
-      supabase.from('pertencer_volunteers').select('id,display_name').eq('active', true).order('display_name'),
-      supabase.from('pertencer_agenda_items').select('sequence,title,volunteer_id').eq('event_id', event.id).order('sequence'),
+      supabase.from('profiles').select('id,display_name').eq('active', true).order('display_name'),
+      supabase.from('pertencer_agenda_items').select('sequence,title,volunteer_profile_id').eq('event_id', event.id).order('sequence'),
     ])
     if (volunteerResult.error || agendaResult.error) {
-      setError('Não foi possível carregar o roteiro ou os voluntários. Confira se a migration do roteiro está aplicada.')
+      setError('Não foi possível carregar o roteiro ou os perfis dos voluntários. Confira se as migrations estão aplicadas.')
       setAgendaLoading(false)
       return
     }
     setVolunteers((volunteerResult.data ?? []) as Volunteer[])
     const nextAssignments: Record<number, string> = {}
-    for (const item of (agendaResult.data ?? []) as AgendaRecord[]) if (item.volunteer_id) nextAssignments[item.sequence] = item.volunteer_id
+    for (const item of (agendaResult.data ?? []) as AgendaRecord[]) if (item.volunteer_profile_id) nextAssignments[item.sequence] = item.volunteer_profile_id
     setAssignments(nextAssignments)
     setAgendaLoading(false)
   }, [event, session?.user.id])
@@ -156,22 +154,10 @@ export function PertencerPage() {
     else await loadEventAndGuests()
   }
 
-  async function addVolunteer(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setNotice(''); setError('')
-    const displayName = volunteerName.trim().replace(/\s+/g, ' ')
-    if (!displayName || !supabase) return
-    setAddingVolunteer(true)
-    const { data: savedVolunteer, error: saveError } = await supabase.from('pertencer_volunteers').insert({ display_name: displayName }).select('id,display_name').single()
-    setAddingVolunteer(false)
-    if (saveError) { setError(saveError.code === '23505' ? 'Esse voluntário já está cadastrado.' : 'Não foi possível cadastrar o voluntário.'); return }
-    if (savedVolunteer) setVolunteers(current => [...current, savedVolunteer as Volunteer].sort((a, b) => a.display_name.localeCompare(b.display_name, 'pt-BR')))
-    setVolunteerName(''); setNotice('Voluntário adicionado à lista.')
-  }
-
   async function saveAgenda() {
     if (!supabase || !event || !isAdmin) return
     setSavingAgenda(true); setError(''); setNotice('')
-    const rows = agendaItems.map((title, index) => ({ event_id: event.id, sequence: index + 1, title, volunteer_id: assignments[index + 1] || null }))
+    const rows = agendaItems.map((title, index) => ({ event_id: event.id, sequence: index + 1, title, volunteer_profile_id: assignments[index + 1] || null }))
     const { error: saveError } = await supabase.from('pertencer_agenda_items').upsert(rows, { onConflict: 'event_id,sequence' })
     setSavingAgenda(false)
     if (saveError) { setError('Não foi possível salvar as atribuições do roteiro.'); return }
@@ -216,7 +202,6 @@ export function PertencerPage() {
       {!event && isAdmin && <form onSubmit={createEvent} className="grid gap-3 rounded-xl border border-[#E5DDCF] bg-[#FBF9F4] p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"><label className="block text-xs font-medium">Data do café<input className="form-input mt-1.5 h-10 text-sm" type="date" min={localDate()} required value={newEventDate} onChange={e => setNewEventDate(e.target.value)}/></label><label className="block text-xs font-medium">Nome da edição<input className="form-input mt-1.5 h-10 text-sm" maxLength={120} required value={newEventTitle} onChange={e => setNewEventTitle(e.target.value)}/></label><button type="submit" disabled={creatingEvent} className="inline-flex h-10 items-center justify-center rounded-lg bg-[#8A6729] px-4 text-sm font-medium text-white disabled:opacity-60">{creatingEvent ? 'Salvando…' : 'Criar edição'}</button></form>}
       {!event && !isAdmin && <p className="rounded-xl bg-[#FBF9F4] p-4 text-sm text-[#68645C]">O roteiro estará disponível quando uma edição futura for cadastrada.</p>}
       {event && <>
-        {isAdmin && <form onSubmit={addVolunteer} className="flex flex-col gap-2 rounded-xl border border-[#E5DDCF] bg-[#FBF9F4] p-4 sm:flex-row"><label className="flex-1 text-xs font-medium">Adicionar voluntário à lista<input className="form-input mt-1.5 h-10 text-sm" maxLength={120} required value={volunteerName} onChange={e => setVolunteerName(e.target.value)} placeholder="Nome da pessoa que serve"/></label><button type="submit" disabled={addingVolunteer} className="mt-auto inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#D9CCB2] bg-white px-4 text-sm font-medium text-[#8A6729] disabled:opacity-60"><UserPlus size={15}/>{addingVolunteer ? 'Adicionando…' : 'Adicionar'}</button></form>}
         {agendaLoading ? <p role="status" className="text-sm text-[#68645C]">Carregando roteiro e voluntários…</p> : <div className="space-y-2">{agendaItems.map((item, index) => <label key={item} className="grid gap-2 rounded-xl border border-[#E5DDCF] p-3 sm:grid-cols-[48px_minmax(0,1fr)_minmax(200px,.8fr)] sm:items-center"><span className="grid size-9 place-items-center rounded-lg bg-[#F0E6D2] text-sm font-semibold text-[#8A6729]">{String(index + 1).padStart(2, '0')}</span><span className="text-sm font-medium">{item}</span><select aria-label={`Voluntário responsável por ${item}`} disabled={!isAdmin} className="h-10 rounded-lg border border-[#D9CCB2] bg-white px-3 text-sm disabled:bg-[#F7F2E8]" value={assignments[index + 1] ?? ''} onChange={e => setAssignments(current => ({ ...current, [index + 1]: e.target.value }))}><option value="">{volunteers.length ? 'Selecionar voluntário' : 'Nenhum voluntário cadastrado'}</option>{volunteers.map(volunteer => <option key={volunteer.id} value={volunteer.id}>{volunteer.display_name}</option>)}</select></label>)}</div>}
         {isAdmin && <div className="flex justify-end"><button type="button" onClick={() => void saveAgenda()} disabled={savingAgenda || agendaLoading} className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#8A6729] px-4 text-sm font-medium text-white disabled:opacity-60"><Save size={15}/>{savingAgenda ? 'Salvando…' : 'Salvar roteiro'}</button></div>}
         {!isAdmin && <p className="text-xs text-[#68645C]">Somente administradores podem cadastrar voluntários ou alterar as atribuições.</p>}
