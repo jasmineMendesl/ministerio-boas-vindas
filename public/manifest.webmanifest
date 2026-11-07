@@ -1,0 +1,13 @@
+{
+  "name": "Ministério de Boas-Vindas",
+  "short_name": "Boas-Vindas",
+  "description": "Ministério de Boas-Vindas",
+  "start_url": "./#/",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F8F8F5",
+  "theme_color": "#F8F8F5",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -44,6 +44,12 @@ A migration 202611050004_visitor_service_gift_reports.sql cria o fechamento por 
 
 ## Escalas do Ministério
 
-A migration `202611060002_ministry_schedules_and_auth_profiles.sql` cria escalas por data e culto (domingo às 10h, domingo às 18h e quinta às 19h15), permitindo múltiplos voluntários por função e várias funções por pessoa. O perfil é ligado ao usuário de autenticação pelo ID; novos usuários Auth recebem perfil `team` automaticamente. Somente administradores consultam os e-mails de login para mapear o nome do voluntário. A equipe consulta as escalas e a própria próxima atribuição; somente admin cria, altera ou exclui escalas.
+A migration `202611060002_ministry_schedules_and_auth_profiles.sql` cria escalas por data e culto (domingo às 10h, domingo às 18h e quinta às 19h15), permitindo múltiplos voluntários por função e várias funções por pessoa. O perfil é ligado ao usuário de autenticação pelo ID; novos usuários Auth recebem perfil `team` automaticamente. O nome exibido vem de `public.profiles.display_name`; a equipe consulta escalas e sua próxima atribuição, enquanto somente admin cria, altera ou exclui escalas.
 
-Depois de aplicar essa migration, o administrador poderá revisar o nome vinculado a cada e-mail na tela **Escala**. Perfis existentes são preservados; usuários Auth sem perfil recebem `team`.
+Perfis existentes são preservados; usuários Auth sem perfil recebem `team`. Para alterar o nome mostrado nas escalas, atualize `public.profiles.display_name` diretamente no banco. A relação com o login é feita pelo mesmo `id` de `auth.users`; atualize a página após mudar o nome para carregar o valor novo.
+
+## Notificações push em segundo plano
+
+A migration `202611060003_background_web_push.sql` cria as inscrições privadas por dispositivo e adiciona o estado de publicação das escalas. O cadastro público notifica somente perfis admin ativos que ativaram push; a publicação da escala notifica somente os voluntários atribuídos. O conteúdo do push de visitante é genérico e não inclui nome, telefone ou pedido de oração.
+
+Configure `VAPID_PUBLIC_KEY` e `VAPID_PRIVATE_KEY` como secrets das Edge Functions do Supabase. A chave pública fica em `src/lib/push-config.ts` e pode ser distribuída ao navegador; a chave privada nunca deve ir ao frontend ou ao GitHub. Publique as funções com `npm run functions:deploy:notifications`. Os usuários precisam ativar as notificações no dispositivo. Em iPhone/iPad, o site precisa ser adicionado à Tela de Início para receber Web Push.

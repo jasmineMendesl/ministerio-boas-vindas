@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:db": "node scripts/verify-supabase-migration.mjs",
     "db:push": "supabase db push --remote",
-    "functions:deploy:visitor": "supabase functions deploy public-visitor-register"
+    "functions:deploy:visitor": "supabase functions deploy public-visitor-register",
+    "functions:deploy:notifications": "supabase functions deploy notify-schedule-published && supabase functions deploy public-visitor-register"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",

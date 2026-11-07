@@ -3,8 +3,8 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 
 export type AppRole = 'admin' | 'team'
-type AuthContextValue = { session: Session | null; role: AppRole | null; displayName: string | null; loading: boolean; refreshProfile: () => Promise<void> }
-const AuthContext = createContext<AuthContextValue>({ session: null, role: null, displayName: null, loading: true, refreshProfile: async () => {} })
+type AuthContextValue = { session: Session | null; role: AppRole | null; displayName: string | null; loading: boolean }
+const AuthContext = createContext<AuthContextValue>({ session: null, role: null, displayName: null, loading: true })
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -43,15 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  async function refreshProfile() {
-    if (!supabase || !session?.user.id) return
-    const { data, error } = await supabase.from('profiles').select('role, active, display_name').eq('id', session.user.id).maybeSingle()
-    if (error || !data?.active) return
-    setRole(data.role === 'admin' || data.role === 'team' ? data.role : null)
-    setDisplayName(data.display_name)
-  }
-
-  const value = useMemo(() => ({ session, role, displayName, loading, refreshProfile }), [session, role, displayName, loading])
+  const value = useMemo(() => ({ session, role, displayName, loading }), [session, role, displayName, loading])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

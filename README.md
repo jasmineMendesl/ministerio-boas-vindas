@@ -44,4 +44,8 @@ npm run build
 
 ## Escalas
 
-A área autenticada `/escala` permite que admin cadastre uma escala por data e culto (domingo às 10h, domingo às 18h ou quinta às 19h15), atribua voluntários em sete funções e mapeie cada nome ao e-mail de login. Team tem acesso somente de leitura. A próxima atribuição pessoal aparece em destaque no Dashboard. A migration `202611060002_ministry_schedules_and_auth_profiles.sql` precisa ser aplicada no Supabase para ativar o módulo.
+A área autenticada `/escala` permite que admin cadastre uma escala por data e culto (domingo às 10h, domingo às 18h ou quinta às 19h15), atribua voluntários em sete funções usando os nomes salvos no banco. Team tem acesso somente de leitura. A próxima atribuição pessoal aparece em destaque no Dashboard. A migration `202611060002_ministry_schedules_and_auth_profiles.sql` precisa ser aplicada no Supabase para ativar o módulo.
+
+### Notificações em segundo plano
+
+O sistema usa Web Push; não há cobrança por mensagem do protocolo, mas o uso segue os limites do plano Supabase. A migration `202611060003_background_web_push.sql` deve ser aplicada e as chaves VAPID configuradas antes de ativar: chave pública em `src/lib/push-config.ts` e chave privada somente como secret Supabase. O aviso de visitante é enviado apenas a admins com push ativo. Avisos da escala seguem apenas para voluntários atribuídos quando o admin publica a escala.

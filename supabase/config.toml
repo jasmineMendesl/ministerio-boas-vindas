@@ -2,3 +2,6 @@ project_id = "projeto-pertencer"
 
 [functions.public-visitor-register]
 verify_jwt = false
+
+[functions.notify-schedule-published]
+verify_jwt = true
