@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import QRCode from 'qrcode'
 import { Bookmark, CalendarDays, Check, ClipboardCopy, Eye, MessageSquare, Pencil, Plus, QrCode, Search, Trash2, UserRound, UsersRound, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -36,6 +37,7 @@ function MetricCard({ icon: Icon, label, value, helper }: { icon: LucideIcon; la
 
 export function VisitorsPage() {
   const { session, role } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [people, setPeople] = useState<VisitorPerson[]>([])
   const [visitorsLoading, setVisitorsLoading] = useState(true)
   const [visitorsError, setVisitorsError] = useState('')
@@ -70,7 +72,7 @@ export function VisitorsPage() {
   const [qrImage, setQrImage] = useState('')
   const [copied, setCopied] = useState(false)
   const [giftReports, setGiftReports] = useState<ServiceGiftReport[]>([])
-  const [activeVisitorTab, setActiveVisitorTab] = useState<VisitorTab>('visitors')
+  const [activeVisitorTab, setActiveVisitorTab] = useState<VisitorTab>(() => searchParams.get('tab') === 'gifts' ? 'gifts' : 'visitors')
   const [giftPage, setGiftPage] = useState(1)
   const [giftPageSize, setGiftPageSize] = useState<5 | 10 | 25>(5)
   const [showGiftReport, setShowGiftReport] = useState(false)
@@ -176,6 +178,17 @@ export function VisitorsPage() {
   }
 
   useEffect(() => { void loadVisitors(); void loadGiftReports() }, [session?.user.id])
+
+  useEffect(() => {
+    if (searchParams.get('tab') === 'gifts') setActiveVisitorTab('gifts')
+    if (searchParams.get('register') !== '1') return
+    const date = searchParams.get('date')
+    const service = searchParams.get('service')
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) setGiftReportDate(date)
+    if (service && services.slice(1).includes(service)) setGiftReportService(service)
+    setShowGiftReport(true)
+    setSearchParams({ tab: 'gifts' }, { replace: true })
+  }, [searchParams, setSearchParams])
   useEffect(() => {
     let active = true
     QRCode.toDataURL(visitorFormUrl, { width: 144, margin: 1, errorCorrectionLevel: 'H', color: { dark: '#8A6729', light: '#ffffff' } })
@@ -340,8 +353,8 @@ export function VisitorsPage() {
     </section>
 
     <nav role="tablist" aria-label="Seções de visitantes" className="flex gap-1 rounded-xl border border-[#D9CCB2] bg-[#F0E6D2] p-1">
-      <button type="button" role="tab" aria-selected={activeVisitorTab === 'gifts'} aria-controls="gift-reports-panel" onClick={() => setActiveVisitorTab('gifts')} className={`min-h-10 flex-1 rounded-lg px-3 py-2 text-sm font-medium ${activeVisitorTab === 'gifts' ? 'bg-white text-[#8A6729] shadow-sm' : 'text-[#68645C]'}`}>Fechamento de mimos</button>
-      <button type="button" role="tab" aria-selected={activeVisitorTab === 'visitors'} aria-controls="visitors-panel" onClick={() => setActiveVisitorTab('visitors')} className={`min-h-10 flex-1 rounded-lg px-3 py-2 text-sm font-medium ${activeVisitorTab === 'visitors' ? 'bg-white text-[#8A6729] shadow-sm' : 'text-[#68645C]'}`}>Visitantes do QR Code</button>
+      <button type="button" role="tab" aria-selected={activeVisitorTab === 'gifts'} aria-controls="gift-reports-panel" onClick={() => { setActiveVisitorTab('gifts'); setSearchParams({ tab: 'gifts' }, { replace: true }) }} className={`min-h-10 flex-1 rounded-lg px-3 py-2 text-sm font-medium ${activeVisitorTab === 'gifts' ? 'bg-white text-[#8A6729] shadow-sm' : 'text-[#68645C]'}`}>Fechamento de mimos</button>
+      <button type="button" role="tab" aria-selected={activeVisitorTab === 'visitors'} aria-controls="visitors-panel" onClick={() => { setActiveVisitorTab('visitors'); setSearchParams({}, { replace: true }) }} className={`min-h-10 flex-1 rounded-lg px-3 py-2 text-sm font-medium ${activeVisitorTab === 'visitors' ? 'bg-white text-[#8A6729] shadow-sm' : 'text-[#68645C]'}`}>Visitantes do QR Code</button>
     </nav>
 
     {activeVisitorTab === 'gifts' && <section id="gift-reports-panel" role="tabpanel" aria-labelledby="gift-report-title" className="overflow-hidden rounded-xl border border-[#E5DDCF] bg-white shadow-[0_2px_7px_rgba(0,0,0,.025)]">
