@@ -38,12 +38,11 @@ export function DashboardPage() {
       const comparisonYear = now.getFullYear()
       const yearStart = `${comparisonYear}-01-01`
       const nextYearStart = `${comparisonYear + 1}-01-01`
-      const [visitors, decisions, followUps, event, visitorDays, acceptanceDays] = await Promise.all([
-        supabase.from('visitors').select('id', { count: 'exact', head: true }).gte('visited_on', firstDay),
+      const [giftReportDays, decisions, followUps, event, acceptanceDays] = await Promise.all([
+        supabase.from('visitor_service_gift_reports').select('service_date,gifts_delivered').gte('service_date', yearStart).lt('service_date', nextYearStart),
         supabase.from('decisions').select('id', { count: 'exact', head: true }).gte('decided_on', firstDay),
         supabase.from('follow_ups').select('id', { count: 'exact', head: true }).eq('status', 'awaiting_first_contact'),
         supabase.from('pertencer_events').select('id,event_date').gte('event_date', today).order('event_date', { ascending: true }).limit(1),
-        supabase.from('visitors').select('visited_on').gte('visited_on', yearStart).lt('visited_on', nextYearStart),
         supabase.from('decisions').select('decided_on').eq('decision_type', 'acceptance').gte('decided_on', yearStart).lt('decided_on', nextYearStart),
       ])
       if (!active) return
@@ -71,7 +70,7 @@ export function DashboardPage() {
           }
         } else { setPersonalAssignments([]); setTodayAssignments([]); setPendingGiftClosures([]) }
       }
-      const failed = visitors.error || decisions.error || followUps.error || event.error || visitorDays.error || acceptanceDays.error
+      const failed = giftReportDays.error || decisions.error || followUps.error || event.error || acceptanceDays.error
       if (failed) { setError('Não foi possível carregar todos os indicadores. Verifique a conexão e as permissões.'); setStats(emptyStats) }
       else {
         const upcoming = event.data?.[0]
@@ -83,13 +82,13 @@ export function DashboardPage() {
         }
         if (!active) return
         setStats({
-          visitorsThisMonth: visitors.count ?? 0,
+          visitorsThisMonth: (giftReportDays.data ?? []).filter(row => row.service_date >= firstDay && row.service_date <= today).reduce((total, row) => total + row.gifts_delivered, 0),
           decisionsThisMonth: decisions.count ?? 0,
           awaitingContact: followUps.count ?? 0,
           invitations,
           nextEvent: upcoming?.event_date ?? '',
-          sundayVisitors: (visitorDays.data ?? []).filter(row => getServiceDay(row.visited_on) === 'sunday').length,
-          thursdayVisitors: (visitorDays.data ?? []).filter(row => getServiceDay(row.visited_on) === 'thursday').length,
+          sundayVisitors: (giftReportDays.data ?? []).filter(row => getServiceDay(row.service_date) === 'sunday').reduce((total, row) => total + row.gifts_delivered, 0),
+          thursdayVisitors: (giftReportDays.data ?? []).filter(row => getServiceDay(row.service_date) === 'thursday').reduce((total, row) => total + row.gifts_delivered, 0),
           sundayAcceptances: (acceptanceDays.data ?? []).filter(row => getServiceDay(row.decided_on) === 'sunday').length,
           thursdayAcceptances: (acceptanceDays.data ?? []).filter(row => getServiceDay(row.decided_on) === 'thursday').length,
           comparisonYear,
@@ -108,7 +107,7 @@ export function DashboardPage() {
     {error && <p role="alert" className="status-pending rounded-lg border px-3 py-2 text-sm">{error}</p>}
     {loading && <p role="status" className="text-xs text-[#68645C]">Carregando indicadores…</p>}
     <section aria-label="Indicadores do ministério" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <SummaryCard icon={UsersRound} title="Visitas neste mês" value={stats.visitorsThisMonth} subtitle="Registros de culto"/>
+      <SummaryCard icon={UsersRound} title="Visitantes neste mês" value={stats.visitorsThisMonth} subtitle="Contados pelos mimos entregues"/>
       <SummaryCard icon={HeartHandshake} title="Decisões neste mês" value={stats.decisionsThisMonth} subtitle="Aceitações e reconciliações"/>
       <SummaryCard icon={CalendarDays} title="Aguardando primeiro contato" value={stats.awaitingContact} subtitle="Pendências de acompanhamento"/>
       <SummaryCard icon={Coffee} title="Convidados na próxima edição" value={stats.invitations} subtitle={stats.nextEvent ? `Edição em ${new Date(`${stats.nextEvent}T12:00:00`).toLocaleDateString('pt-BR')}` : 'Nenhuma edição futura cadastrada'}/>
