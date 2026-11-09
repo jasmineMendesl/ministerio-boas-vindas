@@ -42,7 +42,7 @@ export function DashboardPage() {
         supabase.from('visitor_service_gift_reports').select('service_date,gifts_delivered').gte('service_date', yearStart).lt('service_date', nextYearStart),
         supabase.from('decisions').select('id', { count: 'exact', head: true }).gte('decided_on', firstDay),
         supabase.from('follow_ups').select('id', { count: 'exact', head: true }).eq('status', 'awaiting_first_contact'),
-        supabase.from('pertencer_events').select('id,event_date').gte('event_date', today).order('event_date', { ascending: true }).limit(1),
+        supabase.from('pertencer_events').select('id,event_date').gte('event_date', today).is('closed_at', null).order('event_date', { ascending: true }).limit(1),
         supabase.from('decisions').select('decided_on').eq('decision_type', 'acceptance').gte('decided_on', yearStart).lt('decided_on', nextYearStart),
       ])
       if (!active) return

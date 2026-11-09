@@ -33,7 +33,7 @@ export function DecisionsModule() {
     const today = `${localToday.getFullYear()}-${String(localToday.getMonth() + 1).padStart(2, '0')}-${String(localToday.getDate()).padStart(2, '0')}`
     const [decisionResult, eventResult] = await Promise.all([
       supabase.from('decisions').select('id,person_id,decision_type,baptized,interested_in_baptism,accepts_messages,welcomed_by_user_id,decided_on,notes,person:people!decisions_person_id_fkey(full_name,phone_normalized),welcomed_profile:profiles!decisions_welcomed_by_user_id_fkey(display_name),follow_up:follow_ups!follow_ups_decision_id_person_id_fkey(id,status,contact_date,notes)').order('decided_on', { ascending: false }),
-      supabase.from('pertencer_events').select('id').gte('event_date', today).order('event_date', { ascending: true }).limit(1),
+      supabase.from('pertencer_events').select('id').gte('event_date', today).is('closed_at', null).order('event_date', { ascending: true }).limit(1),
     ])
     if (decisionResult.error) {
       setRecords([])

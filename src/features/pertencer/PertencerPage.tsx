@@ -6,7 +6,7 @@ import { editableInvitationStatuses, invitationStatusLabels, invitationStatusTon
 
 type Invitation = { id: string; followUpId: string; name: string; phone: string; decision: string; decisionDate: string; confirmation: InvitationStatus; attended: boolean }
 type Row = { id: string; attendance: InvitationStatus; attended: boolean; confirmed_at: string | null; attendance_recorded_at: string | null; person: { full_name: string; phone_normalized: string } | { full_name: string; phone_normalized: string }[] | null; follow_up_id: string }
-type Event = { id: string; event_date: string; title: string }
+type Event = { id: string; event_date: string; title: string; closed_at: string | null }
 type HistoryGuest = { id: string; attendance: InvitationStatus; attended: boolean; name: string; phone: string }
 type HistoryEdition = Event & { guests: HistoryGuest[] }
 type Volunteer = { id: string; display_name: string }
@@ -45,12 +45,14 @@ export function PertencerPage() {
   const [newEventDate, setNewEventDate] = useState('')
   const [newEventTitle, setNewEventTitle] = useState('Projeto Pertencer')
   const [creatingEvent, setCreatingEvent] = useState(false)
+  const [closingEvent, setClosingEvent] = useState(false)
+  const [confirmCloseEvent, setConfirmCloseEvent] = useState(false)
 
   const loadEventAndGuests = useCallback(async () => {
     if (!supabase || !session?.user.id) { setError('Entre com uma conta autorizada para consultar as edições.'); setLoading(false); return }
     setLoading(true); setError('')
     const today = localDate()
-    const eventResult = await supabase.from('pertencer_events').select('id,event_date,title').gte('event_date', today).order('event_date', { ascending: true }).limit(1)
+    const eventResult = await supabase.from('pertencer_events').select('id,event_date,title,closed_at').gte('event_date', today).is('closed_at', null).order('event_date', { ascending: true }).limit(1)
     if (eventResult.error) { setError('Não foi possível carregar as edições. Verifique as permissões do perfil.'); setEvent(null); setInvitations([]); setLoading(false); return }
     const selectedEvent = (eventResult.data?.[0] as Event | undefined) ?? null
     setEvent(selectedEvent)
@@ -76,7 +78,7 @@ export function PertencerPage() {
   const loadHistory = useCallback(async () => {
     if (!supabase || !session?.user.id) { setHistoryError('Entre com uma conta autorizada para consultar o histórico.'); setHistoryLoading(false); return }
     setHistoryLoading(true); setHistoryError('')
-    const editionsResult = await supabase.from('pertencer_events').select('id,event_date,title').lt('event_date', localDate()).order('event_date', { ascending: false })
+    const editionsResult = await supabase.from('pertencer_events').select('id,event_date,title,closed_at').or(`event_date.lt.${localDate()},closed_at.not.is.null`).order('event_date', { ascending: false })
     if (editionsResult.error) { setHistoryError('Não foi possível carregar o histórico de cafés.'); setHistoryEditions([]); setHistoryLoading(false); return }
     const editions = (editionsResult.data ?? []) as Event[]
     if (!editions.length) { setHistoryEditions([]); setHistoryLoading(false); return }
@@ -168,12 +170,23 @@ export function PertencerPage() {
     eventForm.preventDefault(); setError(''); setNotice('')
     if (!supabase || !isAdmin) return
     setCreatingEvent(true)
-    const { data, error: createError } = await supabase.from('pertencer_events').insert({ event_date: newEventDate, title: newEventTitle.trim() || 'Projeto Pertencer' }).select('id,event_date,title').single()
+    const { data, error: createError } = await supabase.from('pertencer_events').insert({ event_date: newEventDate, title: newEventTitle.trim() || 'Projeto Pertencer' }).select('id,event_date,title,closed_at').single()
     setCreatingEvent(false)
     if (createError || !data) { setError(createError?.code === '23505' ? 'Já existe uma edição nesta data.' : 'Não foi possível cadastrar a edição.'); return }
     setEvent(data as Event)
     await loadEventAndGuests()
     setNotice('Edição cadastrada. Os convites pendentes e o roteiro já estão disponíveis.')
+  }
+
+  async function closeCurrentEvent() {
+    if (!supabase || !isAdmin || !event) return
+    setClosingEvent(true); setError(''); setNotice('')
+    const { error: closeError } = await supabase.rpc('admin_close_pertencer_event', { p_event_id: event.id })
+    setClosingEvent(false)
+    if (closeError) { setError('Não foi possível encerrar a edição. Confira se a migration de encerramento foi aplicada.'); return }
+    setConfirmCloseEvent(false)
+    setNotice('Edição encerrada. Novas decisões serão associadas à próxima edição aberta. Os convidados atuais foram mantidos no histórico.')
+    await loadEventAndGuests()
   }
 
   return <div className="animate-in space-y-4 text-[#161616] sm:space-y-5">
@@ -186,6 +199,7 @@ export function PertencerPage() {
     </header>
     <section className="rounded-2xl border border-[#D9CCB2] bg-white p-4 shadow-[0_3px_14px_rgba(0,0,0,.035)] sm:p-6">
       <div className="flex flex-col justify-between gap-3 border-b border-[#E5DDCF] pb-4 sm:flex-row sm:items-start"><div><p className="flex items-center gap-2 text-xs font-medium text-[#8A6729]"><CalendarDays size={15}/>{event?.title ?? 'Edição do Projeto Pertencer'}</p><h2 className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">{event ? `Próximo Café: ${formatDate(event.event_date)}` : 'Nenhuma edição futura cadastrada'}</h2></div></div>
+      {isAdmin && event && event.event_date <= localDate() && <div className="flex justify-end border-b border-[#E5DDCF] pb-4"><button type="button" onClick={() => setConfirmCloseEvent(true)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#E8C8C4] bg-[#FFF1EF] px-4 text-sm font-semibold text-[#9B3B32] hover:bg-[#FDE4E1]">Encerrar edição do café</button></div>}
       <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6 sm:gap-3"><Metric icon={UsersRound} label="Convidados" value={counts.all} color="status-neutral"/><Metric icon={Clock3} label="Pendente" value={counts.pending} color="status-pending"/><Metric icon={Clock3} label="Não respondido" value={counts.no_response} color="status-pending"/><Metric icon={XCircle} label="Não vai comparecer" value={counts.declined} color="status-negative"/><Metric icon={CheckCircle2} label="Vai comparecer" value={counts.confirmed} color="status-positive"/><Metric icon={CheckCircle2} label="Compareceu" value={counts.present} color="status-positive"/></div>
     </section>
     <nav aria-label="Seções do Projeto Pertencer" className="flex gap-1 overflow-x-auto rounded-xl border border-[#D9CCB2] bg-[#F0E6D2] p-1">{tabs.map(tab => <button key={tab.id} type="button" aria-current={activeTab === tab.id ? 'page' : undefined} onClick={() => setActiveTab(tab.id)} className={`inline-flex min-h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium sm:flex-1 sm:text-sm ${activeTab === tab.id ? 'bg-white text-[#8A6729] shadow-sm' : 'text-[#34322E]'}`}>{tab.label}</button>)}</nav>
@@ -209,5 +223,6 @@ export function PertencerPage() {
     </section>}
 
     {activeTab === 'history' && <section className="space-y-4">{historyError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{historyError}</p>}{historyLoading ? <p role="status" className="rounded-xl border border-[#E5DDCF] bg-white p-6 text-center text-sm text-[#68645C]">Carregando histórico de cafés...</p> : historyEditions.length ? historyEditions.map(edition => <article key={edition.id} className="overflow-hidden rounded-2xl border border-[#D9CCB2] bg-white shadow-[0_3px_14px_rgba(0,0,0,.035)]"><header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E5DDCF] bg-[#FBF9F4] px-4 py-3"><div><p className="text-xs font-medium text-[#8A6729]">{edition.title}</p><h2 className="mt-1 font-semibold">Café de {formatDate(edition.event_date)}</h2></div><span className="rounded-full bg-[#F0E6D2] px-3 py-1 text-xs text-[#68645C]">{edition.guests.length} convidado(s)</span></header>{edition.guests.length ? <div className="overflow-x-auto"><table className="w-full min-w-[560px] border-collapse text-left text-sm"><thead className="bg-white text-xs font-semibold text-[#34322E]"><tr><th className="px-4 py-3">Convidado</th><th className="px-3 py-3">Status do convite</th><th className="px-3 py-3">Presença</th></tr></thead><tbody>{edition.guests.map(guest => <tr key={guest.id} className="border-t border-[#E5DDCF]"><td className="px-4 py-3"><p className="font-semibold">{guest.name}</p><p className="mt-0.5 text-xs text-[#68645C]">{guest.phone}</p></td><td className="px-3 py-3"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${tone[guest.attendance]}`}>{label[guest.attendance]}</span></td><td className="px-3 py-3">{isAdmin ? <select aria-label={`Presença de ${guest.name} em ${edition.title}`} value={guest.attended ? 'true' : 'false'} disabled={savingCheckinId === guest.id} onChange={e => void updateCheckin(guest.id, e.target.value === 'true')} className={`h-9 rounded-lg border px-2 text-xs font-medium ${guest.attended ? 'status-positive' : 'status-negative'} disabled:opacity-60`}><option value="true">Veio</option><option value="false">Não veio</option></select> : guest.attended ? <span className="status-positive inline-flex rounded-full border px-2.5 py-1 text-xs">Veio</span> : <span className="status-negative inline-flex rounded-full border px-2.5 py-1 text-xs">Não veio</span>}</td></tr>)}</tbody></table></div> : <p className="px-4 py-6 text-center text-sm text-[#68645C]">Nenhum convidado foi associado a esta edição.</p>}</article>) : <section className="empty-panel min-h-[260px]"><span className="empty-icon"><ClipboardList size={22}/></span><h2 className="mt-4 text-lg font-semibold">Histórico de cafés</h2><p className="mt-2 max-w-md text-sm leading-6 text-[#68645C]">As edições anteriores aparecerão aqui automaticamente a partir do dia seguinte ao café, com seus convidados e presenças.</p></section>}</section>}
+    {confirmCloseEvent && event && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4"><section role="alertdialog" aria-modal="true" aria-labelledby="close-event-title" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"><div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#F0E6D2] text-[#8A6729]"><CheckCircle2 size={18}/></span><div><h2 id="close-event-title" className="text-lg font-semibold">Encerrar esta edição do café</h2><p className="mt-1 text-sm leading-5 text-[#68645C]">A edição de {formatDate(event.event_date)} sairá da lista atual e ficará no histórico. Os convidados já registrados serão mantidos. Novas decisões serão vinculadas à próxima edição aberta.</p></div></div>{error && <p role="alert" className="status-negative mt-3 rounded-lg border px-3 py-2 text-sm">{error}</p>}<div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" disabled={closingEvent} onClick={() => setConfirmCloseEvent(false)} className="min-h-10 rounded-lg border border-[#E5DDCF] px-4 text-sm font-medium">Cancelar</button><button type="button" disabled={closingEvent} onClick={() => void closeCurrentEvent()} className="min-h-10 rounded-lg bg-[#8A6729] px-4 text-sm font-semibold text-white disabled:opacity-60">{closingEvent ? 'Encerrando...' : 'Confirmar encerramento'}</button></div></section></div>}
   </div>
 }
