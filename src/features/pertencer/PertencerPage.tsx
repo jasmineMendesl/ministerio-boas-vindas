@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { CalendarDays, CheckCircle2, Coffee, Search, UsersRound, XCircle, Clock3, Save, ClipboardList } from 'lucide-react'
+import { CalendarDays, CheckCircle2, Coffee, Pencil, Plus, Search, Trash2, UsersRound, X, XCircle, Clock3, Save, ClipboardList } from 'lucide-react'
 import { useAuth } from '../../app/AuthProvider'
 import { supabase } from '../../lib/supabase'
 import { editableInvitationStatuses, invitationStatusLabels, invitationStatusTones, type InvitationStatus } from './invitation-status'
@@ -7,6 +7,7 @@ import { editableInvitationStatuses, invitationStatusLabels, invitationStatusTon
 type Invitation = { id: string; followUpId: string; name: string; phone: string; decision: string; decisionDate: string; confirmation: InvitationStatus; attended: boolean }
 type Row = { id: string; attendance: InvitationStatus; attended: boolean; confirmed_at: string | null; attendance_recorded_at: string | null; person: { full_name: string; phone_normalized: string } | { full_name: string; phone_normalized: string }[] | null; follow_up_id: string }
 type Event = { id: string; event_date: string; title: string; closed_at: string | null }
+type DecisionCandidate = { id: string; personId: string; followUpId: string; name: string; decision: string; decisionDate: string }
 type HistoryGuest = { id: string; attendance: InvitationStatus; attended: boolean; name: string; phone: string }
 type HistoryEdition = Event & { guests: HistoryGuest[] }
 type Volunteer = { id: string; display_name: string }
@@ -47,6 +48,18 @@ export function PertencerPage() {
   const [creatingEvent, setCreatingEvent] = useState(false)
   const [closingEvent, setClosingEvent] = useState(false)
   const [confirmCloseEvent, setConfirmCloseEvent] = useState(false)
+  const [editingEvent, setEditingEvent] = useState(false)
+  const [editEventDate, setEditEventDate] = useState('')
+  const [editEventTitle, setEditEventTitle] = useState('')
+  const [savingEventEdit, setSavingEventEdit] = useState(false)
+  const [confirmDeleteEvent, setConfirmDeleteEvent] = useState(false)
+  const [deletingEvent, setDeletingEvent] = useState(false)
+  const [eventActionError, setEventActionError] = useState('')
+  const [showDecisionPicker, setShowDecisionPicker] = useState(false)
+  const [decisionCandidates, setDecisionCandidates] = useState<DecisionCandidate[]>([])
+  const [decisionSearch, setDecisionSearch] = useState('')
+  const [decisionCandidatesLoading, setDecisionCandidatesLoading] = useState(false)
+  const [addingDecisionId, setAddingDecisionId] = useState<string | null>(null)
 
   const loadEventAndGuests = useCallback(async () => {
     if (!supabase || !session?.user.id) { setError('Entre com uma conta autorizada para consultar as edições.'); setLoading(false); return }
@@ -189,6 +202,84 @@ export function PertencerPage() {
     await loadEventAndGuests()
   }
 
+  function startEventEdit() {
+    if (!event) return
+    setEditEventDate(event.event_date)
+    setEditEventTitle(event.title)
+    setEventActionError('')
+    setEditingEvent(true)
+  }
+
+  async function saveEventEdit(eventForm: FormEvent<HTMLFormElement>) {
+    eventForm.preventDefault()
+    if (!supabase || !isAdmin || !event) return
+    setSavingEventEdit(true); setEventActionError('')
+    const { error: saveError } = await supabase.rpc('admin_update_pertencer_event', {
+      p_event_id: event.id,
+      p_event_date: editEventDate,
+      p_title: editEventTitle.trim(),
+    })
+    setSavingEventEdit(false)
+    if (saveError) { setEventActionError(saveError.code === '23505' ? 'Já existe outra edição nessa data.' : 'Não foi possível editar. Confira se a migration está aplicada.'); return }
+    setEditingEvent(false)
+    await loadEventAndGuests()
+    setNotice('Edição atualizada.')
+  }
+
+  async function deleteCurrentEvent() {
+    if (!supabase || !isAdmin || !event) return
+    setDeletingEvent(true); setEventActionError('')
+    const { error: deleteError } = await supabase.rpc('admin_delete_pertencer_event', { p_event_id: event.id })
+    setDeletingEvent(false)
+    if (deleteError) { setEventActionError('Não foi possível excluir a edição. Confira se a migration está aplicada.'); return }
+    setConfirmDeleteEvent(false)
+    await loadEventAndGuests()
+    setNotice('Edição excluída junto com seus convites, presenças e roteiro.')
+  }
+
+  async function loadDecisionCandidates() {
+    if (!supabase || !event || !isAdmin) return
+    setDecisionCandidatesLoading(true); setEventActionError('')
+    const [decisionsResult, invitationsResult] = await Promise.all([
+      supabase.from('decisions').select('id,person_id,decision_type,decided_on,person:people!decisions_person_id_fkey(full_name),follow_up:follow_ups!follow_ups_decision_id_person_id_fkey(id)').order('decided_on', { ascending: false }),
+      supabase.from('event_invitations').select('person_id').eq('event_id', event.id),
+    ])
+    if (decisionsResult.error || invitationsResult.error) {
+      setEventActionError('Não foi possível carregar as decisões. Verifique as permissões e a conexão.')
+      setDecisionCandidates([]); setDecisionCandidatesLoading(false); return
+    }
+    const normalizeRelation = <T,>(value: T | T[] | null) => Array.isArray(value) ? value[0] ?? null : value
+    const invitedPeople = new Set((invitationsResult.data ?? []).map(row => row.person_id))
+    const seenPeople = new Set<string>()
+    const rows = decisionsResult.data as unknown as Array<{ id: string; person_id: string; decision_type: string; decided_on: string; person: { full_name: string } | { full_name: string }[] | null; follow_up: { id: string } | { id: string }[] | null }>
+    const candidates: DecisionCandidate[] = []
+    for (const row of rows) {
+      if (invitedPeople.has(row.person_id) || seenPeople.has(row.person_id)) continue
+      const person = normalizeRelation(row.person)
+      const followUp = normalizeRelation(row.follow_up)
+      if (!person || !followUp) continue
+      seenPeople.add(row.person_id)
+      candidates.push({ id: row.id, personId: row.person_id, followUpId: followUp.id, name: person.full_name, decision: row.decision_type === 'acceptance' ? 'Aceitação de Jesus' : 'Reconciliação', decisionDate: formatDate(row.decided_on) })
+    }
+    setDecisionCandidates(candidates)
+    setDecisionCandidatesLoading(false)
+  }
+
+  async function addDecisionToCurrentEvent(candidate: DecisionCandidate) {
+    if (!supabase || !isAdmin || !event) return
+    setAddingDecisionId(candidate.id); setEventActionError('')
+    const { error: addError } = await supabase.from('event_invitations').insert({ event_id: event.id, person_id: candidate.personId, follow_up_id: candidate.followUpId, attendance: 'pending' })
+    setAddingDecisionId(null)
+    if (addError) { setEventActionError(addError.code === '23505' ? 'Essa pessoa já está na lista desta edição.' : 'Não foi possível adicionar a decisão. Verifique as permissões do perfil.'); return }
+    setDecisionCandidates(current => current.filter(item => item.personId !== candidate.personId))
+    await loadEventAndGuests()
+    setNotice('Decisão adicionada à edição atual do café.')
+  }
+
+  const filteredDecisionCandidates = decisionCandidates.filter(item =>
+    `${item.name} ${item.decision}`.toLocaleLowerCase('pt-BR').includes(decisionSearch.toLocaleLowerCase('pt-BR')),
+  )
+
   return <div className="animate-in space-y-4 text-[#161616] sm:space-y-5">
     {role === 'team' && <div role="status" className="rounded-lg border border-[#E5DDCF] bg-white px-3 py-2 text-xs text-[#34322E]">Acesso de visualização: a equipe pode consultar esta tela, mas não criar nem alterar dados do Projeto Pertencer.</div>}
     {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
@@ -199,7 +290,7 @@ export function PertencerPage() {
     </header>
     <section className="rounded-2xl border border-[#D9CCB2] bg-white p-4 shadow-[0_3px_14px_rgba(0,0,0,.035)] sm:p-6">
       <div className="flex flex-col justify-between gap-3 border-b border-[#E5DDCF] pb-4 sm:flex-row sm:items-start"><div><p className="flex items-center gap-2 text-xs font-medium text-[#8A6729]"><CalendarDays size={15}/>{event?.title ?? 'Edição do Projeto Pertencer'}</p><h2 className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">{event ? `Próximo Café: ${formatDate(event.event_date)}` : 'Nenhuma edição futura cadastrada'}</h2></div></div>
-      {isAdmin && event && event.event_date <= localDate() && <div className="flex justify-end border-b border-[#E5DDCF] pb-4"><button type="button" onClick={() => setConfirmCloseEvent(true)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#E8C8C4] bg-[#FFF1EF] px-4 text-sm font-semibold text-[#9B3B32] hover:bg-[#FDE4E1]">Encerrar edição do café</button></div>}
+      {isAdmin && event && <div className="flex flex-wrap justify-end gap-2 border-b border-[#E5DDCF] pb-4"><button type="button" onClick={() => { setShowDecisionPicker(true); setDecisionSearch(''); void loadDecisionCandidates() }} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#8A6729] px-3 text-sm font-semibold text-white hover:bg-[#6B4F1D]"><Plus size={15}/>Adicionar decisão</button><button type="button" onClick={startEventEdit} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#E5DDCF] bg-white px-3 text-sm font-medium text-[#34322E] hover:bg-[#FBF9F4]"><Pencil size={15}/>Editar edição</button><button type="button" onClick={() => { setEventActionError(''); setConfirmDeleteEvent(true) }} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#E8C8C4] bg-[#FFF1EF] px-3 text-sm font-semibold text-[#9B3B32] hover:bg-[#FDE4E1]"><Trash2 size={15}/>Excluir edição</button><button type="button" onClick={() => { setError(''); setConfirmCloseEvent(true) }} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#E8C8C4] bg-[#FFF1EF] px-3 text-sm font-semibold text-[#9B3B32] hover:bg-[#FDE4E1]">Encerrar edição</button></div>}
       <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6 sm:gap-3"><Metric icon={UsersRound} label="Convidados" value={counts.all} color="status-neutral"/><Metric icon={Clock3} label="Pendente" value={counts.pending} color="status-pending"/><Metric icon={Clock3} label="Não respondido" value={counts.no_response} color="status-pending"/><Metric icon={XCircle} label="Não vai comparecer" value={counts.declined} color="status-negative"/><Metric icon={CheckCircle2} label="Vai comparecer" value={counts.confirmed} color="status-positive"/><Metric icon={CheckCircle2} label="Compareceu" value={counts.present} color="status-positive"/></div>
     </section>
     <nav aria-label="Seções do Projeto Pertencer" className="flex gap-1 overflow-x-auto rounded-xl border border-[#D9CCB2] bg-[#F0E6D2] p-1">{tabs.map(tab => <button key={tab.id} type="button" aria-current={activeTab === tab.id ? 'page' : undefined} onClick={() => setActiveTab(tab.id)} className={`inline-flex min-h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium sm:flex-1 sm:text-sm ${activeTab === tab.id ? 'bg-white text-[#8A6729] shadow-sm' : 'text-[#34322E]'}`}>{tab.label}</button>)}</nav>
@@ -224,5 +315,8 @@ export function PertencerPage() {
 
     {activeTab === 'history' && <section className="space-y-4">{historyError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{historyError}</p>}{historyLoading ? <p role="status" className="rounded-xl border border-[#E5DDCF] bg-white p-6 text-center text-sm text-[#68645C]">Carregando histórico de cafés...</p> : historyEditions.length ? historyEditions.map(edition => <article key={edition.id} className="overflow-hidden rounded-2xl border border-[#D9CCB2] bg-white shadow-[0_3px_14px_rgba(0,0,0,.035)]"><header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E5DDCF] bg-[#FBF9F4] px-4 py-3"><div><p className="text-xs font-medium text-[#8A6729]">{edition.title}</p><h2 className="mt-1 font-semibold">Café de {formatDate(edition.event_date)}</h2></div><span className="rounded-full bg-[#F0E6D2] px-3 py-1 text-xs text-[#68645C]">{edition.guests.length} convidado(s)</span></header>{edition.guests.length ? <div className="overflow-x-auto"><table className="w-full min-w-[560px] border-collapse text-left text-sm"><thead className="bg-white text-xs font-semibold text-[#34322E]"><tr><th className="px-4 py-3">Convidado</th><th className="px-3 py-3">Status do convite</th><th className="px-3 py-3">Presença</th></tr></thead><tbody>{edition.guests.map(guest => <tr key={guest.id} className="border-t border-[#E5DDCF]"><td className="px-4 py-3"><p className="font-semibold">{guest.name}</p><p className="mt-0.5 text-xs text-[#68645C]">{guest.phone}</p></td><td className="px-3 py-3"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${tone[guest.attendance]}`}>{label[guest.attendance]}</span></td><td className="px-3 py-3">{isAdmin ? <select aria-label={`Presença de ${guest.name} em ${edition.title}`} value={guest.attended ? 'true' : 'false'} disabled={savingCheckinId === guest.id} onChange={e => void updateCheckin(guest.id, e.target.value === 'true')} className={`h-9 rounded-lg border px-2 text-xs font-medium ${guest.attended ? 'status-positive' : 'status-negative'} disabled:opacity-60`}><option value="true">Veio</option><option value="false">Não veio</option></select> : guest.attended ? <span className="status-positive inline-flex rounded-full border px-2.5 py-1 text-xs">Veio</span> : <span className="status-negative inline-flex rounded-full border px-2.5 py-1 text-xs">Não veio</span>}</td></tr>)}</tbody></table></div> : <p className="px-4 py-6 text-center text-sm text-[#68645C]">Nenhum convidado foi associado a esta edição.</p>}</article>) : <section className="empty-panel min-h-[260px]"><span className="empty-icon"><ClipboardList size={22}/></span><h2 className="mt-4 text-lg font-semibold">Histórico de cafés</h2><p className="mt-2 max-w-md text-sm leading-6 text-[#68645C]">As edições anteriores aparecerão aqui automaticamente a partir do dia seguinte ao café, com seus convidados e presenças.</p></section>}</section>}
     {confirmCloseEvent && event && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4"><section role="alertdialog" aria-modal="true" aria-labelledby="close-event-title" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"><div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#F0E6D2] text-[#8A6729]"><CheckCircle2 size={18}/></span><div><h2 id="close-event-title" className="text-lg font-semibold">Encerrar esta edição do café</h2><p className="mt-1 text-sm leading-5 text-[#68645C]">A edição de {formatDate(event.event_date)} sairá da lista atual e ficará no histórico. Os convidados já registrados serão mantidos. Novas decisões serão vinculadas à próxima edição aberta.</p></div></div>{error && <p role="alert" className="status-negative mt-3 rounded-lg border px-3 py-2 text-sm">{error}</p>}<div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" disabled={closingEvent} onClick={() => setConfirmCloseEvent(false)} className="min-h-10 rounded-lg border border-[#E5DDCF] px-4 text-sm font-medium">Cancelar</button><button type="button" disabled={closingEvent} onClick={() => void closeCurrentEvent()} className="min-h-10 rounded-lg bg-[#8A6729] px-4 text-sm font-semibold text-white disabled:opacity-60">{closingEvent ? 'Encerrando...' : 'Confirmar encerramento'}</button></div></section></div>}
+    {editingEvent && event && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/45 p-4"><section role="dialog" aria-modal="true" aria-labelledby="edit-event-title" className="my-auto w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[.14em] text-[#8A6729]">Projeto Pertencer</p><h2 id="edit-event-title" className="mt-1 text-lg font-semibold">Editar edição</h2></div><button type="button" aria-label="Fechar edição" onClick={() => setEditingEvent(false)} className="rounded-lg p-2 text-[#68645C]"><X size={17}/></button></div><form onSubmit={saveEventEdit} className="mt-5 space-y-4"><label className="block text-sm font-medium">Data do café<input type="date" required className="form-input mt-1.5 h-10 text-sm" value={editEventDate} onChange={e => setEditEventDate(e.target.value)}/></label><label className="block text-sm font-medium">Nome da edição<input required maxLength={120} className="form-input mt-1.5 h-10 text-sm" value={editEventTitle} onChange={e => setEditEventTitle(e.target.value)}/></label><p className="text-xs leading-5 text-[#68645C]">Os convidados e presenças serão mantidos nesta edição.</p>{eventActionError && <p role="alert" className="status-negative rounded-lg border px-3 py-2 text-sm">{eventActionError}</p>}<div className="flex flex-col-reverse gap-2 border-t border-[#E5DDCF] pt-4 sm:flex-row sm:justify-end"><button type="button" onClick={() => setEditingEvent(false)} className="min-h-10 rounded-lg border border-[#E5DDCF] px-4 text-sm">Cancelar</button><button type="submit" disabled={savingEventEdit} className="min-h-10 rounded-lg bg-[#8A6729] px-4 text-sm font-semibold text-white disabled:opacity-60">{savingEventEdit ? 'Salvando...' : 'Salvar edição'}</button></div></form></section></div>}
+    {confirmDeleteEvent && event && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4"><section role="alertdialog" aria-modal="true" aria-labelledby="delete-event-title" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"><div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#FFF1EF] text-[#9B3B32]"><Trash2 size={18}/></span><div><h2 id="delete-event-title" className="text-lg font-semibold">Excluir esta edição?</h2><p className="mt-1 text-sm leading-5 text-[#68645C]">A edição “{event.title}” e seus convites serão excluídos permanentemente, incluindo presenças e roteiro. Os cadastros de pessoas e decisões serão mantidos.</p></div></div>{eventActionError && <p role="alert" className="status-negative mt-3 rounded-lg border px-3 py-2 text-sm">{eventActionError}</p>}<div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" disabled={deletingEvent} onClick={() => setConfirmDeleteEvent(false)} className="min-h-10 rounded-lg border border-[#E5DDCF] px-4 text-sm">Cancelar</button><button type="button" disabled={deletingEvent} onClick={() => void deleteCurrentEvent()} className="min-h-10 rounded-lg bg-[#9B3B32] px-4 text-sm font-semibold text-white disabled:opacity-60">{deletingEvent ? 'Excluindo...' : 'Confirmar exclusão'}</button></div></section></div>}
+    {showDecisionPicker && event && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/45 p-4"><section role="dialog" aria-modal="true" aria-labelledby="add-decision-title" className="my-auto max-h-[90dvh] w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl"><header className="flex items-start justify-between gap-3 border-b border-[#E5DDCF] p-5"><div><p className="text-xs font-semibold uppercase tracking-[.14em] text-[#8A6729]">{event.title}</p><h2 id="add-decision-title" className="mt-1 text-lg font-semibold">Adicionar decisão à edição</h2><p className="mt-1 text-sm text-[#68645C]">Escolha uma decisão já cadastrada para convidar ao café atual.</p></div><button type="button" aria-label="Fechar seleção" onClick={() => setShowDecisionPicker(false)} className="rounded-lg p-2 text-[#68645C]"><X size={17}/></button></header><div className="p-4"><label className="relative block"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#68645C]"/><input aria-label="Buscar decisão por nome" className="form-input h-10 pl-9 text-sm" value={decisionSearch} onChange={e => setDecisionSearch(e.target.value)} placeholder="Buscar pelo nome"/></label>{eventActionError && <p role="alert" className="status-negative mt-3 rounded-lg border px-3 py-2 text-sm">{eventActionError}</p>}<div className="mt-3 max-h-[55dvh] space-y-2 overflow-y-auto">{decisionCandidatesLoading ? <p role="status" className="py-8 text-center text-sm text-[#68645C]">Carregando decisões...</p> : filteredDecisionCandidates.map(candidate => <article key={candidate.id} className="flex flex-col gap-2 rounded-xl border border-[#E5DDCF] p-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="break-words text-sm font-semibold">{candidate.name}</p><p className="mt-0.5 text-xs text-[#68645C]">{candidate.decision} · {candidate.decisionDate}</p></div><button type="button" disabled={addingDecisionId === candidate.id} onClick={() => void addDecisionToCurrentEvent(candidate)} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-[#8A6729] px-3 text-sm font-medium text-white disabled:opacity-60"><Plus size={14}/>{addingDecisionId === candidate.id ? 'Adicionando...' : 'Adicionar'}</button></article>)}{!decisionCandidatesLoading && filteredDecisionCandidates.length === 0 && <p className="py-8 text-center text-sm text-[#68645C]">Não há outras decisões disponíveis nesta edição.</p>}</div></div><footer className="border-t border-[#E5DDCF] px-4 py-3 text-right"><button type="button" onClick={() => setShowDecisionPicker(false)} className="min-h-10 rounded-lg border border-[#E5DDCF] px-4 text-sm font-medium">Fechar</button></footer></section></div>}
   </div>
 }
