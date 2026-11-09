@@ -8,7 +8,7 @@ import { getServiceDay } from '../../lib/service-day'
 
 type Stats = { visitorsThisMonth: number; decisionsThisMonth: number; awaitingContact: number; invitations: number; nextEvent: string; sundayVisitors: number; thursdayVisitors: number; sundayAcceptances: number; thursdayAcceptances: number; comparisonYear: number }
 const emptyStats: Stats = { visitorsThisMonth: 0, decisionsThisMonth: 0, awaitingContact: 0, invitations: 0, nextEvent: '', sundayVisitors: 0, thursdayVisitors: 0, sundayAcceptances: 0, thursdayAcceptances: 0, comparisonYear: new Date().getFullYear() }
-const scheduleRoleNames: Record<string, string> = { leader: 'Líder', support: 'Apoio', confession_prayer: 'Oração de Confissão', reconciliation_word: 'Palavra de reconciliação', seat_direction: 'Direcionar os irmãos para os lugares vagos', opening_prayer: 'Oração Inicial', closing_prayer: 'Oração Final' }
+const scheduleRoleNames: Record<string, string> = { portaria_01: 'Portaria 01 — Recepção', portaria_02: 'Portaria 02 — Estacionamento', seat_direction: 'Direcionamento de assentos', leader: 'Líder', support: 'Apoio', media: 'Mídia', opening_prayer: 'Oração inicial', male_welcoming: 'Acolhimento masculino', female_welcoming: 'Acolhimento feminino', equipment_check: 'Conferência de placas e cavaletes', app_closing: 'Fechamento no aplicativo', confession_prayer: 'Oração de Confissão', reconciliation_word: 'Palavra de reconciliação', closing_prayer: 'Oração Final' }
 function localDateInput() { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}` }
 
 function SummaryCard({ icon: Icon, title, value, subtitle }: { icon: typeof UsersRound; title: string; value: number | string; subtitle: string }) {
