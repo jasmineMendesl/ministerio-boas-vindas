@@ -12,11 +12,28 @@ function normalizeOrigin(value: string) {
 const allowedOrigins = new Set((Deno.env.get('VISITOR_ALLOWED_ORIGINS') ?? 'http://localhost:5173,http://127.0.0.1:5173')
   .split(',').map(normalizeOrigin).filter(Boolean))
 
+function isAllowedOrigin(origin: string | null) {
+  if (!origin) return true
+  const normalized = normalizeOrigin(origin)
+  return allowedOrigins.has(normalized) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalized)
+}
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json; charset=utf-8', Vary: 'Origin' }
+  if (origin && isAllowedOrigin(origin)) {
+    headers['Access-Control-Allow-Origin'] = normalizeOrigin(origin)
+    headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+    headers['Access-Control-Allow-Headers'] = 'authorization, apikey, x-client-info, content-type'
+    headers['Access-Control-Max-Age'] = '86400'
+  }
+  return headers
+}
+
 Deno.serve(async (request) => {
   const origin = request.headers.get('origin')
-  const cors = { 'Access-Control-Allow-Origin': origin ? normalizeOrigin(origin) : '', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'authorization, apikey, x-client-info, content-type', Vary: 'Origin' }
+  const cors = corsHeaders(origin)
   const json = (body: unknown, status = 200) => Response.json(body, { status, headers: cors })
-  if (origin && !allowedOrigins.has(normalizeOrigin(origin))) return json({ error: 'Origem não autorizada.' }, 403)
+  if (!isAllowedOrigin(origin)) return json({ error: 'Origem não autorizada.' }, 403)
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors })
   if (request.method !== 'POST') return json({ error: 'Método não permitido.' }, 405)
 

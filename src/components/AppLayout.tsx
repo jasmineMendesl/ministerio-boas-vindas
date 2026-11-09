@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { CalendarDays, Flower2, HeartHandshake, LayoutDashboard, LogOut, Sparkles, UserPlus, UsersRound } from 'lucide-react'
+import { CalendarDays, Coffee, HeartHandshake, LayoutDashboard, LogOut, Sparkles, UserPlus, UsersRound } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../app/AuthProvider'
 import { Button } from './ui/button'
@@ -9,7 +9,7 @@ const links = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/visitantes', label: 'Visitantes', icon: UsersRound },
   { to: '/decisoes', label: 'Aceitações / Reconciliações', short: 'Decisões', icon: HeartHandshake },
-  { to: '/pertencer', label: 'Projeto Pertencer', short: 'Pertencer', icon: Flower2 },
+  { to: '/pertencer', label: 'Projeto Pertencer', short: 'Pertencer', icon: Coffee },
   { to: '/escala', label: 'Escala', icon: CalendarDays },
 ]
 

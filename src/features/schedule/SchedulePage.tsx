@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { CalendarDays, ChevronDown, Info, Plus, Trash2, UsersRound, X } from 'lucide-react'
+import { CalendarDays, Check, ChevronDown, Info, Pencil, Plus, Trash2, UsersRound, X } from 'lucide-react'
 import { useAuth } from '../../app/AuthProvider'
 import { supabase } from '../../lib/supabase'
 const primaryRoles = [
@@ -42,6 +42,8 @@ export function SchedulePage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [expandedScheduleIds, setExpandedScheduleIds] = useState<string[]>([])
+  const [editingScheduleIds, setEditingScheduleIds] = useState<string[]>([])
   const load = useCallback(async () => {
     if (!supabase) { setError('Supabase não está configurado.'); setLoading(false); return }
     setLoading(true); setError('')
@@ -65,6 +67,14 @@ export function SchedulePage() {
     setLoading(false)
   }, [])
   useEffect(() => { void load() }, [load, session?.user.id])
+  function toggleScheduleExpanded(scheduleId: string) {
+    setExpandedScheduleIds(current => current.includes(scheduleId) ? current.filter(id => id !== scheduleId) : [...current, scheduleId])
+  }
+  function toggleScheduleEditing(scheduleId: string) {
+    setError(''); setNotice('')
+    setExpandedScheduleIds(current => current.includes(scheduleId) ? current : [...current, scheduleId])
+    setEditingScheduleIds(current => current.includes(scheduleId) ? current.filter(id => id !== scheduleId) : [...current, scheduleId])
+  }
   async function createSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(''); setNotice('')
     if (!supabase || !session?.user.id || !isAdmin) return
@@ -72,11 +82,11 @@ export function SchedulePage() {
     const { error: saveError } = await supabase.from('ministry_schedules').insert({ service_date: newDate, service_label: newService, created_by: session.user.id, updated_by: session.user.id })
     setSaving(false)
     if (saveError) { setError(saveError.code === '23505' ? 'Já existe uma escala para essa data.' : 'Não foi possível criar a escala.'); return }
-    setNewDate(''); setNotice('Escala criada. Agora adicione as funções e voluntários.'); await load()
+    setNewDate(''); setNotice('Escala criada. Abra “Editar escala” para distribuir as funções e os voluntários.'); await load()
   }
   async function addAssignment(schedule: Schedule, ministryRole: string, personId: string) {
     setError(''); setNotice('')
-    if (!supabase || !session?.user.id || !isAdmin || !personId) return
+    if (!supabase || !session?.user.id || !isAdmin || !editingScheduleIds.includes(schedule.id) || !personId) return
     setSaving(true)
     const { error: saveError } = await supabase.from('ministry_schedule_assignments').insert({ schedule_id: schedule.id, volunteer_profile_id: personId, ministry_role: ministryRole, created_by: session.user.id })
     setSaving(false)
@@ -84,7 +94,7 @@ export function SchedulePage() {
     setNotice('Voluntário adicionado à escala.'); await load()
   }
   async function removeAssignment(item: Assignment) {
-    if (!supabase || !isAdmin) return
+    if (!supabase || !isAdmin || !editingScheduleIds.includes(item.schedule_id)) return
     if (primaryRoleKeys.has(item.ministry_role) && item.schedule_id) {
       const schedule = schedules.find(candidate => candidate.id === item.schedule_id)
       const hasComplementaryAssignments = schedule?.assignments.some(assignment =>
@@ -112,6 +122,7 @@ export function SchedulePage() {
     const { error: publishError } = await supabase.from('ministry_schedules').update({ published_at: new Date().toISOString(), published_by: session.user.id, updated_by: session.user.id }).eq('id', schedule.id)
     if (publishError) { setSaving(false); setError('Não foi possível publicar. Confira as migrations e as permissões do perfil admin.'); return }
     await load()
+    setEditingScheduleIds(current => current.filter(id => id !== schedule.id))
     const { data, error: notifyError } = await supabase.functions.invoke('notify-schedule-published', { body: { scheduleId: schedule.id } })
     setSaving(false)
     if (notifyError) {
@@ -156,31 +167,71 @@ export function SchedulePage() {
     </form>}
     {loading && <p role="status" className="text-sm text-[#68645C]">Carregando escalas…</p>}
     {!loading && !error && schedules.length === 0 && <section className="rounded-2xl border border-dashed border-[#D9CCB2] bg-white p-8 text-center"><CalendarDays size={24} className="mx-auto text-[#8A6729]"/><h2 className="mt-3 font-semibold">Nenhuma escala cadastrada</h2><p className="mt-1 text-sm text-[#68645C]">{isAdmin ? 'Crie uma escala para começar a atribuir as funções.' : 'O administrador ainda não cadastrou escalas.'}</p></section>}
-    <div className="space-y-4">{schedules.map(schedule => <section key={schedule.id} className="overflow-hidden rounded-2xl border border-[#E5DDCF] bg-white shadow-[0_3px_12px_rgba(0,0,0,.035)]">
-      <header className="flex flex-col gap-3 border-b border-[#E5DDCF] bg-[#FBF9F4] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"><div className="flex min-w-0 items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#F0E6D2] text-[#8A6729]"><CalendarDays size={18}/></span><div className="min-w-0"><p className="break-words text-xs uppercase tracking-wide text-[#68645C]">{schedule.service_label} · {schedule.published_at ? 'Publicada' : 'Rascunho'}</p><h2 className="break-words font-semibold capitalize">{formatDate(schedule.service_date)}</h2></div></div>{isAdmin && <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0"><button type="button" disabled={saving || !schedule.assignments.length} onClick={() => void publishSchedule(schedule)} className="min-h-10 min-w-0 flex-1 rounded-lg bg-[#8A6729] px-3 py-2 text-xs font-semibold text-white disabled:opacity-60 sm:flex-none">{schedule.published_at ? 'Publicar atualização' : 'Publicar escala'}</button><button type="button" aria-label={`Excluir escala de ${schedule.service_label} em ${formatDate(schedule.service_date)}`} onClick={() => void deleteSchedule(schedule)} className="grid size-10 shrink-0 place-items-center rounded-lg text-[#8B3C32] hover:bg-red-50"><Trash2 size={16}/></button></div>}</header>
-      <div className="divide-y divide-[#EEE8DC]">{[
-        { title: 'Funções principais', roles: primaryRoles, assignable: true },
-        { title: 'Responsabilidades complementares', roles: complementaryRoles, assignable: true },
-        { title: 'Funções anteriores', roles: legacyRoles, assignable: false },
-      ].map(group => {
-        const visibleRoles = group.roles.filter(([key]) => group.assignable || schedule.assignments.some(item => item.ministry_role === key))
-        if (!visibleRoles.length) return null
-        return <section key={group.title} aria-label={group.title}>
-          <h3 className="bg-[#F7F2E8] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-[#8A6729] sm:px-5">{group.title}</h3>
-          {visibleRoles.map(([key, label]) => {
-        const assigned = schedule.assignments.filter(item => item.ministry_role === key)
-        const assignedVolunteerIds = group.assignable
-          ? new Set(schedule.assignments.filter(item => group.title === 'Funções principais' ? primaryRoleKeys.has(item.ministry_role) : item.ministry_role === key).map(item => item.volunteer_profile_id))
-          : new Set(assigned.map(item => item.volunteer_profile_id))
-        const selectableVolunteers = volunteers.filter(person => {
-          const hasPrimaryRole = schedule.assignments.some(item => item.volunteer_profile_id === person.id && primaryRoleKeys.has(item.ministry_role))
-          const eligibleForGroup = group.title !== 'Responsabilidades complementares' || hasPrimaryRole
-          return eligibleForGroup && !assignedVolunteerIds.has(person.id)
-        })
-        return <div key={key} className="grid min-w-0 gap-2 px-4 py-3 sm:grid-cols-[minmax(190px,.8fr)_minmax(0,1.5fr)] sm:items-start sm:px-5"><div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><p className="break-words text-sm font-medium">{label}</p>{isAdmin && group.assignable && <select aria-label={`Selecionar voluntário para ${label}`} className="form-input h-10 w-full text-sm sm:max-w-56" value="" disabled={saving || volunteers.length === 0 || (group.title === 'Responsabilidades complementares' && !schedule.assignments.some(item => primaryRoleKeys.has(item.ministry_role)))} onChange={event => { if (event.target.value) void addAssignment(schedule, key, event.target.value) }}><option value="">{group.title === 'Responsabilidades complementares' && !schedule.assignments.some(item => primaryRoleKeys.has(item.ministry_role)) ? 'Adicione uma função principal primeiro' : 'Adicionar voluntário'}</option>{selectableVolunteers.map(person => <option key={person.id} value={person.id}>{person.display_name}</option>)}</select>}</div><div className="flex min-w-0 flex-wrap gap-2">{assigned.map(item => <span key={item.id} className="inline-flex max-w-full items-center gap-2 rounded-full bg-[#F7F2E8] px-3 py-1.5 text-sm"><UsersRound size={14} className="shrink-0 text-[#8A6729]"/><span className="break-words">{item.volunteer?.display_name ?? 'Voluntário'}</span>{isAdmin && <button type="button" aria-label={`Remover ${item.volunteer?.display_name ?? 'voluntário'} da função ${label}`} onClick={() => void removeAssignment(item)} className="ml-1 shrink-0 rounded-full text-[#8B3C32] hover:text-red-800"><X size={14}/></button>}</span>)}{assigned.length === 0 && <span className="text-sm text-[#938B7E]">Ainda sem voluntário</span>}</div></div>
-          })}
-        </section>
-      })}</div>
-    </section>)}</div>
+    <div className="space-y-3">{schedules.map(schedule => {
+      const isExpanded = expandedScheduleIds.includes(schedule.id)
+      const isEditing = editingScheduleIds.includes(schedule.id)
+      const volunteerCount = new Set(schedule.assignments.map(item => item.volunteer_profile_id)).size
+      return <section key={schedule.id} className="overflow-hidden rounded-2xl border border-[#E5DDCF] bg-white shadow-[0_3px_12px_rgba(0,0,0,.035)]">
+        <header className="flex flex-col gap-3 bg-[#FBF9F4] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <button type="button" aria-expanded={isExpanded} onClick={() => toggleScheduleExpanded(schedule.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#F0E6D2] text-[#8A6729]"><CalendarDays size={18}/></span>
+            <span className="min-w-0 flex-1">
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs uppercase tracking-wide text-[#68645C]">
+                <span>{schedule.service_label}</span><span aria-hidden="true">?</span>
+                <span className={schedule.published_at ? 'status-positive rounded-full border px-2 py-0.5' : 'status-pending rounded-full border px-2 py-0.5'}>{schedule.published_at ? 'Publicada' : 'Rascunho'}</span>
+              </span>
+              <span className="mt-1 block break-words font-semibold capitalize text-[#22201D]">{formatDate(schedule.service_date)}</span>
+              <span className="mt-1 block text-xs text-[#68645C]">{volunteerCount} {volunteerCount === 1 ? 'voluntário escalado' : 'voluntários escalados'}</span>
+            </span>
+            <ChevronDown size={18} className={`shrink-0 text-[#8A6729] transition-transform ${isExpanded ? 'rotate-180' : ''}`}/>
+          </button>
+          {isAdmin && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
+            <button type="button" aria-pressed={isEditing} onClick={() => toggleScheduleEditing(schedule.id)} className={`inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold sm:flex-none ${isEditing ? 'border-[#CFC0A3] bg-[#F0E6D2] text-[#6B4F1D]' : 'border-[#E5DDCF] bg-white text-[#34322E] hover:bg-[#F7F2E8]'}`}>
+              {isEditing ? <Check size={15}/> : <Pencil size={15}/>}{isEditing ? 'Concluir edição' : 'Editar escala'}
+            </button>
+            {!!schedule.assignments.length && <button type="button" disabled={saving} onClick={() => void publishSchedule(schedule)} className="min-h-10 flex-1 rounded-lg bg-[#8A6729] px-3 py-2 text-xs font-semibold text-white disabled:opacity-60 sm:flex-none">{schedule.published_at ? 'Publicar atualização' : 'Publicar escala'}</button>}
+            <button type="button" aria-label={`Excluir escala de ${schedule.service_label} em ${formatDate(schedule.service_date)}`} onClick={() => void deleteSchedule(schedule)} className="grid size-10 shrink-0 place-items-center rounded-lg text-[#8B3C32] hover:bg-red-50"><Trash2 size={16}/></button>
+          </div>}
+        </header>
+        {isExpanded && <>
+          {isEditing && <p className="border-t border-[#EEE8DC] bg-[#FFFDF9] px-4 py-2.5 text-xs leading-5 text-[#68645C] sm:px-5">Modo de edição ativo. Ao terminar, publique a escala ou a atualização para avisar os voluntários.</p>}
+          <div className="divide-y divide-[#EEE8DC]">{[
+            { title: 'Funções principais', roles: primaryRoles, assignable: true },
+            { title: 'Responsabilidades complementares', roles: complementaryRoles, assignable: true },
+            { title: 'Funções anteriores', roles: legacyRoles, assignable: false },
+          ].map(group => {
+            const visibleRoles = group.roles.filter(([key]) => group.assignable || schedule.assignments.some(item => item.ministry_role === key))
+            if (!visibleRoles.length) return null
+            return <section key={group.title} aria-label={group.title}>
+              <h3 className="bg-[#F7F2E8] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-[#8A6729] sm:px-5">{group.title}</h3>
+              {visibleRoles.map(([key, label]) => {
+                const assigned = schedule.assignments.filter(item => item.ministry_role === key)
+                const assignedVolunteerIds = group.assignable
+                  ? new Set(schedule.assignments.filter(item => group.title === 'Funções principais' ? primaryRoleKeys.has(item.ministry_role) : item.ministry_role === key).map(item => item.volunteer_profile_id))
+                  : new Set(assigned.map(item => item.volunteer_profile_id))
+                const selectableVolunteers = volunteers.filter(person => {
+                  const hasPrimaryRole = schedule.assignments.some(item => item.volunteer_profile_id === person.id && primaryRoleKeys.has(item.ministry_role))
+                  const eligibleForGroup = group.title !== 'Responsabilidades complementares' || hasPrimaryRole
+                  return eligibleForGroup && !assignedVolunteerIds.has(person.id)
+                })
+                return <div key={key} className="grid min-w-0 gap-2 px-4 py-3 sm:grid-cols-[minmax(190px,.8fr)_minmax(0,1.5fr)] sm:items-start sm:px-5">
+                  <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="break-words text-sm font-medium">{label}</p>
+                    {isAdmin && isEditing && group.assignable && <select aria-label={`Selecionar voluntário para ${label}`} className="form-input h-10 w-full text-sm sm:max-w-56" value="" disabled={saving || volunteers.length === 0 || (group.title === 'Responsabilidades complementares' && !schedule.assignments.some(item => primaryRoleKeys.has(item.ministry_role)))} onChange={event => { if (event.target.value) void addAssignment(schedule, key, event.target.value) }}>
+                      <option value="">{group.title === 'Responsabilidades complementares' && !schedule.assignments.some(item => primaryRoleKeys.has(item.ministry_role)) ? 'Adicione uma função principal primeiro' : 'Adicionar voluntário'}</option>
+                      {selectableVolunteers.map(person => <option key={person.id} value={person.id}>{person.display_name}</option>)}
+                    </select>}
+                  </div>
+                  <div className="flex min-w-0 flex-wrap gap-2">
+                    {assigned.map(item => <span key={item.id} className="inline-flex max-w-full items-center gap-2 rounded-full bg-[#F7F2E8] px-3 py-1.5 text-sm"><UsersRound size={14} className="shrink-0 text-[#8A6729]"/><span className="break-words">{item.volunteer?.display_name ?? 'Voluntário'}</span>{isAdmin && isEditing && <button type="button" aria-label={`Remover ${item.volunteer?.display_name ?? 'voluntário'} da função ${label}`} onClick={() => void removeAssignment(item)} className="ml-1 shrink-0 rounded-full text-[#8B3C32] hover:text-red-800"><X size={14}/></button>}</span>)}
+                    {assigned.length === 0 && <span className="text-sm text-[#938B7E]">Ainda sem voluntário</span>}
+                  </div>
+                </div>
+              })}
+            </section>
+          })}</div>
+        </>}
+      </section>
+    })}</div>
   </div>
 }
