@@ -135,18 +135,6 @@ Deno.serve(async (request) => {
   // Honeypot and minimum completion time reduce automated submissions without
   // exposing whether a phone number already exists in the private database.
   if (typeof payload.website === 'string' && payload.website.trim().length > 0) {
-    // Push is best-effort and deliberately generic: visitor personal data and prayer requests
-    // are never sent to the browser notification service.
-    try {
-      const { data: admins } = await client.from('profiles').select('id').eq('role', 'admin').eq('active', true)
-      await sendPushToUsers(client, (admins ?? []).map(profile => profile.id), {
-        title: 'Novo cadastro de visitante',
-        body: 'Uma pessoa respondeu ao formulário. Acesse Visitantes para consultar o cadastro.',
-        url: './#/visitantes',
-        tag: 'new-visitor-registration',
-      })
-    } catch { /* Notification delivery must not block visitor registration. */ }
-
     return jsonResponse(successBody, 200, origin)
   }
   if (typeof payload.startedAt !== 'number' || Date.now() - payload.startedAt < 900) {
@@ -194,6 +182,24 @@ Deno.serve(async (request) => {
       p_prayer_request: prayerRequest,
     })
     if (registrationError) return jsonResponse({ ok: false, message: 'Não foi possível concluir agora. Tente novamente mais tarde.' }, 503, origin)
+
+    // Send a generic push only to active admin profiles. Personal information and
+    // prayer requests stay in the database and never enter the notification payload.
+    try {
+      const { data: admins, error: adminsError } = await client
+        .from('profiles')
+        .select('id')
+        .eq('role', 'admin')
+        .eq('active', true)
+      if (!adminsError && admins?.length) {
+        await sendPushToUsers(client, admins.map(profile => profile.id), {
+          title: 'Novo cadastro de visitante',
+          body: 'Uma pessoa respondeu ao formulário. Acesse Visitantes para consultar o cadastro.',
+          url: './#/visitantes',
+          tag: 'new-visitor-registration',
+        })
+      }
+    } catch { /* Notification delivery must not block visitor registration. */ }
 
     return jsonResponse(successBody, 200, origin)
   } catch {

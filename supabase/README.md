@@ -50,6 +50,6 @@ Perfis existentes são preservados; usuários Auth sem perfil recebem `team`. Pa
 
 ## Notificações push em segundo plano
 
-A migration `202611060003_background_web_push.sql` cria as inscrições privadas por dispositivo e adiciona o estado de publicação das escalas. O cadastro público notifica somente perfis admin ativos que ativaram push; a publicação da escala notifica somente os voluntários atribuídos. O conteúdo do push de visitante é genérico e não inclui nome, telefone ou pedido de oração.
+A migration `202611060003_background_web_push.sql` cria as inscrições privadas por dispositivo e adiciona o estado de publicação das escalas. O cadastro público e o registro de novas decisões notificam somente perfis admin ativos que ativaram push; a publicação da escala notifica somente os voluntários atribuídos. Os avisos de visitante e decisão são genéricos e não incluem dados pessoais.
 
 Configure `VAPID_PUBLIC_KEY` e `VAPID_PRIVATE_KEY` como secrets das Edge Functions do Supabase. A chave pública fica em `src/lib/push-config.ts` e pode ser distribuída ao navegador; a chave privada nunca deve ir ao frontend ou ao GitHub. Publique as funções com `npm run functions:deploy:notifications`. Os usuários precisam ativar as notificações no dispositivo. Em iPhone/iPad, o site precisa ser adicionado à Tela de Início para receber Web Push.

@@ -280,7 +280,7 @@ export function DecisionRegistrationPage() {
 
     if (!supabase || !session?.user.id) { setError('Sua sessão não está ativa. Entre novamente para registrar a decisão.'); return }
     const record = result.records[0]
-    const { error: saveError } = await supabase.rpc('register_staff_decision', {
+    const { data: decisionId, error: saveError } = await supabase.rpc('register_staff_decision', {
       p_full_name: record.personName,
       p_phone_normalized: record.phoneNormalized,
       p_decision_type: record.type,
@@ -291,6 +291,11 @@ export function DecisionRegistrationPage() {
       p_notes: record.observations || null,
     })
     if (saveError) { setError('Não foi possível registrar a decisão. Confira as migrations e as permissões do perfil.'); return }
+    if (typeof decisionId === 'string') {
+      try {
+        await supabase.functions.invoke('notify-decision-created', { body: { decisionId } })
+      } catch { /* A falha na notificação não desfaz o cadastro da decisão. */ }
+    }
     await refreshRecords()
     setNotice('Decisão registrada e pendência de primeiro contato criada no Supabase.')
     navigate('/decisoes')
