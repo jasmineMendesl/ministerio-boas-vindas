@@ -5,6 +5,7 @@ import { Bookmark, CalendarDays, Check, ClipboardCopy, Eye, MessageSquare, Penci
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { PageHeader } from '../../components/PageHeader'
+import { PageTabs } from '../../components/PageTabs'
 import { useAuth } from '../../app/AuthProvider'
 import { supabase } from '../../lib/supabase'
 import { buildPublicVisitorUrl, filterVisitors, firstVisit, formatVisitorPhone, type VisitorPerson, type VisitorVisit } from './visitor-data'
@@ -350,10 +351,7 @@ export function VisitorsPage() {
       <MetricCard icon={UsersRound} label="Taxa de Preenchimento" value={`${fillRate}%`} helper="Formulários QR ÷ mimos entregues"/>
     </section>
 
-    <nav role="tablist" aria-label="Seções de visitantes" className="flex gap-1 rounded-xl border border-[#D9CCB2] bg-[#F0E6D2] p-1">
-      <button type="button" role="tab" aria-selected={activeVisitorTab === 'gifts'} aria-controls="gift-reports-panel" onClick={() => { setActiveVisitorTab('gifts'); setSearchParams({ tab: 'gifts' }, { replace: true }) }} className={`min-h-10 flex-1 rounded-lg px-3 py-2 text-sm font-medium ${activeVisitorTab === 'gifts' ? 'bg-white text-[#8A6729] shadow-sm' : 'text-[#68645C]'}`}>Fechamento de mimos</button>
-      <button type="button" role="tab" aria-selected={activeVisitorTab === 'visitors'} aria-controls="visitors-panel" onClick={() => { setActiveVisitorTab('visitors'); setSearchParams({}, { replace: true }) }} className={`min-h-10 flex-1 rounded-lg px-3 py-2 text-sm font-medium ${activeVisitorTab === 'visitors' ? 'bg-white text-[#8A6729] shadow-sm' : 'text-[#68645C]'}`}>Visitantes do QR Code</button>
-    </nav>
+    <PageTabs ariaLabel="Seções de visitantes" activeId={activeVisitorTab} onChange={value => { setActiveVisitorTab(value); if (value === 'gifts') setSearchParams({ tab: 'gifts' }, { replace: true }); else setSearchParams({}, { replace: true }) }} tabs={[{ id: 'gifts', label: 'Fechamento de mimos', controls: 'gift-reports-panel' }, { id: 'visitors', label: 'Visitantes do QR Code', controls: 'visitors-panel' }]}/>
 
     {activeVisitorTab === 'gifts' && <section id="gift-reports-panel" role="tabpanel" aria-labelledby="gift-report-title" className="overflow-hidden rounded-xl border border-[#E5DDCF] bg-white shadow-[0_2px_7px_rgba(0,0,0,.025)]">
       <div className="flex flex-col gap-3 border-b border-[#F7F2E8] p-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 id="gift-report-title" className="flex items-center gap-2 text-sm font-semibold"><CalendarDays size={17} className="text-[#8A6729]"/>Fechamento de mimos por culto</h2><p className="mt-1 text-xs text-[#68645C]">O líder, entre os 6 voluntários do culto, informa a data e a quantidade entregue. O sistema identifica quem registrou.</p></div><Button type="button" size="sm" onClick={() => { setGiftReportError(''); setGiftReportDate(localDateInput()); setShowGiftReport(true) }} className="h-9 self-start rounded-lg bg-[#8A6729] px-3 text-xs hover:bg-[#6B4F1D] sm:self-auto"><Plus size={14}/> Registrar fechamento</Button></div>

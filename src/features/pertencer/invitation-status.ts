@@ -2,9 +2,13 @@ import type { FollowUpStatus } from '../decisions/decision-data'
 
 export type InvitationStatus = 'pending' | 'no_response' | 'declined' | 'confirmed' | 'present' | 'absent'
 
-export const editableInvitationStatuses: Exclude<InvitationStatus, 'absent'>[] = [
-  'pending', 'no_response', 'declined', 'confirmed', 'present',
+export const editableInvitationStatuses: Exclude<InvitationStatus, 'absent' | 'present'>[] = [
+  'pending', 'no_response', 'declined', 'confirmed',
 ]
+
+export function invitationStatusForDisplay(status: InvitationStatus): InvitationStatus {
+  return status === 'present' ? 'confirmed' : status
+}
 
 export const invitationStatusLabels: Record<InvitationStatus, string> = {
   pending: 'Pendente',

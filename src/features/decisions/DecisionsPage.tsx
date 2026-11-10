@@ -1,12 +1,12 @@
-﻿import { createContext, useCallback, useContext, useEffect, useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
 import { useNavigate, Outlet } from 'react-router-dom'
-import { ArrowLeft, CalendarDays, Heart, MessageCircle, Pencil, Search, Share2, Sparkles, Trash2, UsersRound, X } from 'lucide-react'
+import { ArrowLeft, CalendarDays, ChevronDown, Heart, MessageCircle, Pencil, Search, Share2, Sparkles, Trash2, UsersRound, X } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { PageHeader } from '../../components/PageHeader'
 import { addDecision, type DecisionRecord, type DecisionType } from './decision-data'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../app/AuthProvider'
-import { editableInvitationStatuses, followUpToInvitationStatus, invitationStatusLabels, invitationStatusTones, invitationToFollowUpStatus, type InvitationStatus } from '../pertencer/invitation-status'
+import { editableInvitationStatuses, followUpToInvitationStatus, invitationStatusForDisplay, invitationStatusLabels, invitationStatusTones, invitationToFollowUpStatus, type InvitationStatus } from '../pertencer/invitation-status'
 import { matchesServiceDay, type ServiceDayFilter } from '../../lib/service-day'
 import { normalizeBrazilianPhone, normalizeVisitorName } from '../../../supabase/functions/_shared/visitor-validation'
 
@@ -16,7 +16,6 @@ const formatPhone = (value: string) => {
   const digits = value.replace(/\D/g, '')
   return digits.startsWith('55') && digits.length === 13 ? `(${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}` : value
 }
-const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toLocaleUpperCase('pt-BR')
 
 type DecisionsContextValue = { records: DecisionRecord[]; setRecords: Dispatch<SetStateAction<DecisionRecord[]>>; notice: string; setNotice: (notice: string) => void; refreshRecords: () => Promise<void>; loading: boolean; eventId: string | null }
 const DecisionsContext = createContext<DecisionsContextValue | null>(null)
@@ -63,7 +62,7 @@ export function DecisionsModule() {
       const welcomedProfile = relation(row.welcomed_profile)
       const followUp = relation(row.follow_up)
       const invitation = invitationsByPerson.get(row.person_id)
-      const invitationStatus = invitation?.attendance ?? followUpToInvitationStatus(followUp?.status ?? 'awaiting_first_contact')
+      const invitationStatus = invitationStatusForDisplay(invitation?.attendance ?? followUpToInvitationStatus(followUp?.status ?? 'awaiting_first_contact'))
       return {
         id: row.id, personId: row.person_id, personName: person?.full_name ?? '', phoneNormalized: person?.phone_normalized ?? '',
         type: row.decision_type, baptized: row.baptized, interestedInBaptism: row.interested_in_baptism,
@@ -120,6 +119,7 @@ export function DecisionsPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [serviceDay, setServiceDay] = useState<ServiceDayFilter>('all')
+  const [expandedDecisionIds, setExpandedDecisionIds] = useState<string[]>([])
   const recent = useMemo(() => [...records].sort((a, b) => b.decidedOn.localeCompare(a.decidedOn)), [records])
   const filteredRecords = useMemo(() => recent.filter(record =>
     (!dateFrom || record.decidedOn >= dateFrom)
@@ -228,14 +228,26 @@ export function DecisionsPage() {
       <section aria-labelledby="recent-decisions-title" className="min-w-0">
         <div className="mb-2.5 flex flex-col items-start justify-between gap-1 sm:flex-row sm:items-center sm:gap-3"><h2 id="recent-decisions-title" className="text-sm font-semibold">Decisões Registradas</h2><span className="text-xs text-[#68645C]">Mostrando {filteredRecords.length} de {records.length}</span></div>
         <div className="space-y-2.5">
-          {filteredRecords.map(record => <article key={record.id} className="min-w-0 rounded-2xl border border-[#E5DDCF] bg-white p-4 shadow-[0_4px_14px_rgba(0,0,0,.035)] sm:p-5">
-            <div className="flex min-w-0 items-start gap-2.5"><span className={`grid size-9 shrink-0 place-items-center rounded-xl text-xs font-semibold ${record.type === 'acceptance' ? 'bg-[#F0E6D2] text-[#8A6729]' : 'bg-[#F0E6D2] text-[#B08A3E]'}`}>{initials(record.personName)}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-1.5"><span className="break-words text-left text-sm font-semibold text-[#161616]">{record.personName}</span><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${record.type === 'acceptance' ? 'bg-[#F0E6D2] text-[#8A6729]' : 'bg-[#F0E6D2] text-[#B08A3E]'}`}>{decisionLabels[record.type]}</span></div><div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#68645C]"><span className="inline-flex items-center gap-1"><CalendarDays size={12}/>{record.type === 'acceptance' ? 'Aceitou' : 'Reconciliação'} em {formatDate(record.decidedOn)}</span><span className="inline-flex items-center gap-1"><MessageCircle size={12}/>{formatPhone(record.phoneNormalized)}</span></div></div></div>
-            <label className="mt-3 block text-xs font-medium text-[#68645C]">Status do convite<select aria-label={`Status do convite de ${record.personName}`} disabled={role !== 'admin' || !record.followUp.id || savingStatusId === record.followUp.id} value={record.invitationStatus ?? followUpToInvitationStatus(record.followUp.status)} onChange={event => void updateInvitationStatus(record, event.target.value as InvitationStatus)} className={`mt-1.5 h-10 w-full rounded-lg border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-75 ${invitationStatusTones[record.invitationStatus ?? followUpToInvitationStatus(record.followUp.status)]}`}><option value="absent" disabled>{invitationStatusLabels.absent} (histórico)</option>{editableInvitationStatuses.map(status => <option key={status} value={status}>{invitationStatusLabels[status]}</option>)}</select></label>
-            <div className="mt-2.5 grid gap-2 rounded-xl border border-[#F7F2E8] bg-[#F7F2E8] p-2.5 sm:grid-cols-2"><div><p className="text-xs text-[#68645C]">Batismo nas águas</p><p className="mt-1 inline-flex items-center gap-1 text-xs font-medium"><span className="text-[#B08A3E]">◉</span>{record.baptized ? 'Já batizada' : 'Ainda não batizada'}</p></div><div className="sm:col-span-2"><p className="text-xs text-[#68645C]">Registrado por</p><p className="mt-1 text-xs font-medium">{record.welcomedBy}</p></div></div>
-            {record.observations && <p className="mt-2 text-xs leading-4 text-[#68645C]">{record.observations}</p>}
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center"><a href={`https://wa.me/${record.phoneNormalized.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" aria-label={`Abrir conversa no WhatsApp com ${record.personName}`} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#8A6729] px-3 text-sm font-medium text-white hover:bg-[#6B4F1D] sm:w-auto"><MessageCircle size={15}/> WhatsApp</a>{role === 'admin' && <div className="flex gap-2"><button type="button" onClick={() => startEditing(record)} className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-[#E5DDCF] bg-white px-3 text-sm font-medium text-[#34322E] hover:bg-[#FBF9F4] sm:flex-none"><Pencil size={15}/>Editar</button><button type="button" onClick={() => { setRecordToDelete(record); setDecisionActionError('') }} aria-label={`Excluir decisão de ${record.personName}`} className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-[#E8C8C4] bg-[#FFF1EF] px-3 text-sm font-medium text-[#9B3B32] hover:bg-[#FDE4E1] sm:flex-none"><Trash2 size={15}/>Excluir</button></div>}</div>
-          </article>)}
-          {filteredRecords.length === 0 && <div className="rounded-2xl border border-dashed border-[#E5DDCF] bg-white px-5 py-10 text-center"><span className="mx-auto grid size-11 place-items-center rounded-xl bg-[#F0E6D2] text-[#8A6729]"><Search size={17}/></span><h3 className="mt-3 text-sm font-semibold">Nenhuma decisão encontrada</h3><p className="mt-1 text-xs text-[#68645C]">Ajuste o período ou selecione outro culto.</p></div>}
+          {filteredRecords.map(record => {
+            const expanded = expandedDecisionIds.includes(record.id)
+            const currentStatus = record.invitationStatus ?? followUpToInvitationStatus(record.followUp.status)
+            return <article key={record.id} className="min-w-0 overflow-hidden rounded-2xl border border-[#E5DDCF] bg-white shadow-[0_4px_14px_rgba(0,0,0,.035)]">
+              <div className="flex min-w-0 items-center gap-3 p-3.5 sm:px-5">
+                <button type="button" aria-expanded={expanded} onClick={() => setExpandedDecisionIds(current => expanded ? current.filter(id => id !== record.id) : [...current, record.id])} className="flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 text-left">
+                  <span className="min-w-0"><span className="block break-words text-sm font-semibold text-[#161616]">{record.personName}</span><span className={`mt-1 inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${invitationStatusTones[currentStatus]}`}>{invitationStatusLabels[currentStatus]}</span></span>
+                  <ChevronDown size={17} className={`shrink-0 text-[#81796D] transition-transform ${expanded ? 'rotate-180' : ''}`}/>
+                </button>
+                <a href={`https://wa.me/${record.phoneNormalized.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" aria-label={`Abrir conversa no WhatsApp com ${record.personName}`} title="Abrir WhatsApp" className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-[#8A6729] px-3 text-sm font-medium text-white hover:bg-[#6B4F1D]"><MessageCircle size={16}/><span className="hidden sm:inline">WhatsApp</span></a>
+              </div>
+              {expanded && <div id={`decision-details-${record.id}`} className="border-t border-[#EEE8DC] p-3.5 sm:p-5">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#68645C]"><span className="inline-flex items-center gap-1"><CalendarDays size={13}/>{record.type === 'acceptance' ? 'Aceitou' : 'Reconciliação'} em {formatDate(record.decidedOn)}</span><span className="inline-flex items-center gap-1"><MessageCircle size={13}/>{formatPhone(record.phoneNormalized)}</span><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${record.type === 'acceptance' ? 'bg-[#F0E6D2] text-[#8A6729]' : 'bg-[#F0E6D2] text-[#B08A3E]'}`}>{decisionLabels[record.type]}</span></div>
+                <label className="mt-3 block text-xs font-medium text-[#68645C]">Status do convite<select aria-label={`Status do convite de ${record.personName}`} disabled={role !== 'admin' || !record.followUp.id || savingStatusId === record.followUp.id} value={currentStatus} onChange={event => void updateInvitationStatus(record, event.target.value as InvitationStatus)} className={`mt-1.5 h-10 w-full rounded-lg border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-75 ${invitationStatusTones[currentStatus]}`}><option value="absent" disabled>{invitationStatusLabels.absent} (histórico)</option>{editableInvitationStatuses.map(status => <option key={status} value={status}>{invitationStatusLabels[status]}</option>)}</select></label>
+                <div className="mt-2.5 grid gap-2 rounded-xl border border-[#F7F2E8] bg-[#F7F2E8] p-2.5 sm:grid-cols-2"><div><p className="text-xs text-[#68645C]">Batismo nas águas</p><p className="mt-1 inline-flex items-center gap-1 text-xs font-medium"><span className="text-[#B08A3E]">◉</span>{record.baptized ? 'Já batizada' : 'Ainda não batizada'}</p></div><div className="sm:col-span-2"><p className="text-xs text-[#68645C]">Registrado por</p><p className="mt-1 text-xs font-medium">{record.welcomedBy}</p></div></div>
+                {record.observations && <p className="mt-2 text-xs leading-4 text-[#68645C]">{record.observations}</p>}
+                {role === 'admin' && <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => startEditing(record)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#E5DDCF] bg-white px-3 text-sm font-medium text-[#34322E] hover:bg-[#FBF9F4]"><Pencil size={15}/>Editar</button><button type="button" onClick={() => { setRecordToDelete(record); setDecisionActionError('') }} aria-label={`Excluir decisão de ${record.personName}`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#E8C8C4] bg-[#FFF1EF] px-3 text-sm font-medium text-[#9B3B32] hover:bg-[#FDE4E1]"><Trash2 size={15}/>Excluir</button></div>}
+              </div>}
+            </article>
+          })}          {filteredRecords.length === 0 && <div className="rounded-2xl border border-dashed border-[#E5DDCF] bg-white px-5 py-10 text-center"><span className="mx-auto grid size-11 place-items-center rounded-xl bg-[#F0E6D2] text-[#8A6729]"><Search size={17}/></span><h3 className="mt-3 text-sm font-semibold">Nenhuma decisão encontrada</h3><p className="mt-1 text-xs text-[#68645C]">Ajuste o período ou selecione outro culto.</p></div>}
         </div>
       </section>
 

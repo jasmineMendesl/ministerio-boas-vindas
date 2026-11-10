@@ -4,6 +4,8 @@ import { CalendarDays, Check, ChevronDown, Info, MessageSquareText, Pencil, Plus
 import { useAuth } from '../../app/AuthProvider'
 import { supabase } from '../../lib/supabase'
 import { PageHeader } from '../../components/PageHeader'
+import { PageTabs } from '../../components/PageTabs'
+import { ScheduleHistoryTable } from './ScheduleHistoryTable'
 const primaryRoles = [
   ['portaria', 'Portaria'],
   ['seat_direction', 'Direcionamento de assentos'],
@@ -38,7 +40,7 @@ type Volunteer = { id: string; display_name: string }
 type Assignment = { id: string; schedule_id: string; volunteer_profile_id: string; ministry_role: string; volunteer?: Volunteer }
 type ScheduleAttendance = { schedule_id: string; volunteer_profile_id: string; was_absent: boolean }
 type ServiceLabel = 'Domingo às 10h' | 'Domingo às 18h' | 'Quinta às 19h15'
-type Schedule = { id: string; service_date: string; service_label: ServiceLabel; published_at: string | null; special_observation: string | null; assignments: Assignment[]; attendance: ScheduleAttendance[] }
+type Schedule = { id: string; service_date: string; service_label: ServiceLabel; published_at: string | null; special_observation: string | null; assignments: Assignment[]; attendance: ScheduleAttendance[]; visitorsReported: number | null }
 type VolunteerUnit = { members: Volunteer[] }
 type SuggestedTeam = { schedule: Schedule; volunteers: Volunteer[] }
 function normalizeName(value: string) {
@@ -160,13 +162,14 @@ export function SchedulePage() {
   const load = useCallback(async () => {
     if (!supabase) { setError('Supabase não está configurado.'); setLoading(false); return }
     setLoading(true); setError('')
-    const [scheduleResult, assignmentResult, profileResult, attendanceResult] = await Promise.all([
+    const [scheduleResult, assignmentResult, profileResult, attendanceResult, visitorReportResult] = await Promise.all([
       supabase.from('ministry_schedules').select('id,service_date,service_label,published_at,special_observation').order('service_date', { ascending: true }),
       supabase.from('ministry_schedule_assignments').select('id,schedule_id,volunteer_profile_id,ministry_role'),
       supabase.from('profiles').select('id,display_name').eq('active', true).order('display_name'),
       supabase.from('ministry_schedule_attendance').select('schedule_id,volunteer_profile_id,was_absent'),
+      supabase.from('visitor_service_gift_reports').select('service_date,service_label,gifts_delivered'),
     ])
-    if (scheduleResult.error || assignmentResult.error || profileResult.error || attendanceResult.error) {
+    if (scheduleResult.error || assignmentResult.error || profileResult.error || attendanceResult.error || visitorReportResult.error) {
       setError('Não foi possível carregar as escalas. Confira se as migrations de escala e presença estão aplicadas no Supabase.')
       setSchedules([]); setVolunteers([])
     } else {
@@ -174,8 +177,10 @@ export function SchedulePage() {
       setVolunteers(people)
       const assignments = (assignmentResult.data ?? []) as Assignment[]
       const attendance = (attendanceResult.data ?? []) as ScheduleAttendance[]
+      const visitorReports = (visitorReportResult.data ?? []) as { service_date: string; service_label: string; gifts_delivered: number }[]
       setSchedules(((scheduleResult.data ?? []) as Omit<Schedule, 'assignments'>[]).map(schedule => ({
         ...schedule,
+        visitorsReported: visitorReports.find(report => report.service_date === schedule.service_date && report.service_label === schedule.service_label)?.gifts_delivered ?? null,
         assignments: assignments.filter(item => item.schedule_id === schedule.id).map(item => ({ ...item, volunteer: people.find(person => person.id === item.volunteer_profile_id) })),
         attendance: attendance.filter(item => item.schedule_id === schedule.id),
       })))
@@ -312,17 +317,14 @@ export function SchedulePage() {
   }
   return <div className="animate-in space-y-5">
     <PageHeader icon={CalendarDays} eyebrow="GESTÃO DO MINISTÉRIO DE BOAS-VINDAS" title="Escala de Voluntários" description="Organização das funções e equipes de cada culto."/>
-    <div role="tablist" aria-label="Visualização das escalas" className="flex items-center gap-6 border-b border-[#E5DDCF]">
-      <button type="button" role="tab" aria-selected={scheduleTab === 'open'} onClick={() => setScheduleTab('open')} className={`relative inline-flex min-h-12 items-center gap-2 px-1 text-sm font-semibold transition-colors ${scheduleTab === 'open' ? 'text-[#7B571F] after:absolute after:inset-x-0 after:-bottom-px after:h-[2px] after:bg-[#8A6729]' : 'text-[#81796D] hover:text-[#4F493F]'}`}><span>Escala Atual</span><span className={`rounded-full px-2 py-0.5 text-[11px] ${scheduleTab === 'open' ? 'bg-[#F0E6D2] text-[#6B4F1D]' : 'bg-[#F7F2E8] text-[#68645C]'}`}>Semana ativa · {openSchedules.length}</span></button>
-      <button type="button" role="tab" aria-selected={scheduleTab === 'history'} onClick={() => setScheduleTab('history')} className={`relative inline-flex min-h-12 items-center gap-2 px-1 text-sm font-semibold transition-colors ${scheduleTab === 'history' ? 'text-[#7B571F] after:absolute after:inset-x-0 after:-bottom-px after:h-[2px] after:bg-[#8A6729]' : 'text-[#81796D] hover:text-[#4F493F]'}`}><span>Histórico</span><span className="rounded-full border border-[#E5DDCF] bg-white px-2 py-0.5 text-[11px] text-[#68645C]">{historicalSchedules.length} cultos</span></button>
-    </div>
+    <PageTabs ariaLabel="Visualização das escalas" activeId={scheduleTab} onChange={value => setScheduleTab(value as 'open' | 'history')} tabs={[{ id: 'open', label: 'Escala Atual', badge: `Semana ativa · ${openSchedules.length}` }, { id: 'history', label: 'Histórico', badge: `${historicalSchedules.length} cultos` }]}/>
     {role === 'team' && <p className="rounded-xl border border-[#E5DDCF] bg-white px-4 py-3 text-sm text-[#68645C]">Você pode consultar as escalas. A criação e as alterações são feitas pelo administrador.</p>}
     {error && <p role="alert" className="status-negative rounded-lg border px-3 py-2 text-sm">{error}</p>}
     {notice && <p role="status" className="status-positive rounded-lg border px-3 py-2 text-sm">{notice}</p>}
     {isAdmin && <form id="schedule-create" onSubmit={createSchedule} className="space-y-3 rounded-2xl border border-[#E5DDCF] bg-white p-4 shadow-[0_3px_14px_rgba(0,0,0,.025)] sm:p-5">
       <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
         <label className="text-xs font-semibold uppercase tracking-wide text-[#81796D]">Dia do culto<input aria-label="Dia do culto" className="form-input mt-1.5 h-11 w-full" type="date" required value={newDate} onChange={event => setNewDate(event.target.value)}/></label>
-        <label className="text-xs font-semibold uppercase tracking-wide text-[#81796D]">Culto e hor?rio<select aria-label="Culto" className="form-input mt-1.5 h-11 w-full" value={newService} onChange={event => setNewService(event.target.value as ServiceLabel)}><option>Domingo às 10h</option><option>Domingo às 18h</option><option>Quinta às 19h15</option></select></label>
+        <label className="text-xs font-semibold uppercase tracking-wide text-[#81796D]">Culto e hor?rio<select aria-label="Culto" className="form-input mt-1.5 h-11 w-full" value={newService} onChange={event => setNewService(event.target.value as ServiceLabel)}><option value="Quinta às 19h15">Quinta • Noite</option><option value="Domingo às 10h">Domingo • Manhã</option><option value="Domingo às 18h">Domingo • Noite</option></select></label>
         <button type="submit" disabled={saving} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#8A6729] px-4 text-sm font-semibold text-white disabled:opacity-60"><Plus size={16}/>{saving ? 'Salvando…' : 'Criar escala'}</button>
       </div>
       <div>
@@ -352,9 +354,10 @@ export function SchedulePage() {
       {weeklySuggestion && <div className="space-y-3 p-4 sm:p-5"><p className="inline-flex rounded-full border border-[#D9CCB2] bg-[#F7F2E8] px-3 py-1.5 text-xs font-semibold text-[#6B4F1D]">Sugestão de {describeWeek(weeklySuggestion.week)} · não publicada</p><div className="grid gap-3 lg:grid-cols-3">{weeklySuggestion.teams.map(({ schedule, volunteers: suggestedVolunteers }) => <article key={schedule.id} className="rounded-xl border border-[#E5DDCF] bg-[#FFFEFC] p-4"><p className="text-xs font-semibold uppercase tracking-wide text-[#8A6729]">{schedule.service_label}</p><p className="mt-1 text-sm font-medium capitalize">{formatDate(schedule.service_date)}</p><div className="mt-3 flex flex-wrap gap-2">{suggestedVolunteers.map(person => <span key={person.id} className="inline-flex rounded-full border border-[#D9CCB2] bg-white px-2.5 py-1 text-xs font-medium text-[#34322E]">{person.display_name}</span>)}</div><p className="mt-3 text-xs text-[#68645C]">6 pessoas sugeridas, incluindo liderança. Casais permanecem juntos.</p></article>)}</div></div>}
       {!weeklySuggestion && !availableSuggestionWeeks.length && <p className="px-4 py-5 text-sm text-[#68645C]">Crie as escalas da semana para habilitar a sugestão.</p>}
     </section>}
+    {scheduleTab === 'history' && !loading && <ScheduleHistoryTable schedules={historicalSchedules} expandedScheduleIds={expandedScheduleIds} onToggleSchedule={toggleScheduleExpanded}/>}
     {loading && <p role="status" className="text-sm text-[#68645C]">Carregando escalas…</p>}
-    {!loading && !error && displayedSchedules.length === 0 && <section className="rounded-2xl border border-dashed border-[#D9CCB2] bg-white p-8 text-center"><CalendarDays size={24} className="mx-auto text-[#8A6729]"/><h2 className="mt-3 font-semibold">{scheduleTab === 'open' ? 'Nenhuma escala aberta' : 'Nenhuma escala no histórico'}</h2><p className="mt-1 text-sm text-[#68645C]">{scheduleTab === 'open' ? isAdmin ? 'Crie uma escala para um culto de hoje ou futuro.' : 'O administrador ainda não cadastrou escalas atuais.' : 'As escalas de cultos anteriores aparecerão aqui.'}</p></section>}
-    <div className="space-y-3">{displayedSchedules.map(schedule => {
+    {scheduleTab === 'open' && !loading && !error && displayedSchedules.length === 0 && <section className="rounded-2xl border border-dashed border-[#D9CCB2] bg-white p-8 text-center"><CalendarDays size={24} className="mx-auto text-[#8A6729]"/><h2 className="mt-3 font-semibold">{scheduleTab === 'open' ? 'Nenhuma escala aberta' : 'Nenhuma escala no histórico'}</h2><p className="mt-1 text-sm text-[#68645C]">{scheduleTab === 'open' ? isAdmin ? 'Crie uma escala para um culto de hoje ou futuro.' : 'O administrador ainda não cadastrou escalas atuais.' : 'As escalas de cultos anteriores aparecerão aqui.'}</p></section>}
+    {scheduleTab === 'open' && <div className="space-y-3">{displayedSchedules.map(schedule => {
       const isExpanded = expandedScheduleIds.includes(schedule.id)
       const isEditing = editingScheduleIds.includes(schedule.id)
       const volunteerCount = new Set(schedule.assignments.map(item => item.volunteer_profile_id)).size
@@ -439,6 +442,6 @@ export function SchedulePage() {
           </section>
         </>}
       </section>
-    })}</div>
+    })}</div>}
   </div>
 }
