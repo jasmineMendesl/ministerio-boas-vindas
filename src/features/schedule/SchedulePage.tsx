@@ -6,6 +6,8 @@ import { supabase } from '../../lib/supabase'
 import { PageHeader } from '../../components/PageHeader'
 import { PageTabs } from '../../components/PageTabs'
 import { ScheduleHistoryTable } from './ScheduleHistoryTable'
+import { ExtraSchedulesPanel } from './ExtraSchedulesPanel'
+import { DeleteScheduleDialog } from './DeleteScheduleDialog'
 const primaryRoles = [
   ['portaria', 'Portaria'],
   ['seat_direction', 'Direcionamento de assentos'],
@@ -140,7 +142,7 @@ function formatDate(value: string) {
 }
 export function SchedulePage() {
   const { role, session } = useAuth()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const requestedScheduleId = searchParams.get('schedule')
   const isAdmin = role === 'admin'
   const [schedules, setSchedules] = useState<Schedule[]>([])
@@ -153,7 +155,10 @@ export function SchedulePage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
-  const [scheduleTab, setScheduleTab] = useState<'open' | 'history'>('open')
+  const [scheduleToDelete, setScheduleToDelete] = useState<Schedule | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+  const scheduleTab = searchParams.get('tab') === 'extra' ? 'extra' : searchParams.get('tab') === 'history' ? 'history' : 'open'
   const [expandedScheduleIds, setExpandedScheduleIds] = useState<string[]>([])
   const [editingScheduleIds, setEditingScheduleIds] = useState<string[]>([])
   const [savingAttendanceKey, setSavingAttendanceKey] = useState('')
@@ -259,10 +264,18 @@ export function SchedulePage() {
     await load()
   }
   async function deleteSchedule(schedule: Schedule) {
-    if (!supabase || !isAdmin || !window.confirm(`Excluir a escala ${schedule.service_label} de ${formatDate(schedule.service_date)} e todas as atribuições?`)) return
-    const { error: deleteError } = await supabase.from('ministry_schedules').delete().eq('id', schedule.id)
-    if (deleteError) { setError('Não foi possível excluir a escala.'); return }
-    setNotice('Escala excluída.'); await load()
+    if (!supabase || !isAdmin || deleting) return
+    setDeleting(true); setDeleteError(''); setNotice('')
+    try {
+      const { data, error: removeError } = await supabase.from('ministry_schedules').delete().eq('id', schedule.id).select('id')
+      if (removeError || !data?.length) {
+        setDeleteError('Não foi possível excluir a escala. Confira sua conexão e as permissões de administrador.'); return
+      }
+      setSchedules(current => current.filter(item => item.id !== schedule.id))
+      setScheduleToDelete(null)
+      setNotice('Escala excluída.')
+    } catch { setDeleteError('Não foi possível excluir a escala. Confira sua conexão e tente novamente.') }
+    finally { setDeleting(false) }
   }
   async function publishSchedule(schedule: Schedule) {
     if (!supabase || !session?.user.id || !isAdmin) return
@@ -317,7 +330,8 @@ export function SchedulePage() {
   }
   return <div className="animate-in space-y-5">
     <PageHeader icon={CalendarDays} eyebrow="GESTÃO DO MINISTÉRIO DE BOAS-VINDAS" title="Escala de Voluntários" description="Organização das funções e equipes de cada culto."/>
-    <PageTabs ariaLabel="Visualização das escalas" activeId={scheduleTab} onChange={value => setScheduleTab(value as 'open' | 'history')} tabs={[{ id: 'open', label: 'Escala Atual', badge: `Semana ativa · ${openSchedules.length}` }, { id: 'history', label: 'Histórico', badge: `${historicalSchedules.length} cultos` }]}/>
+    <PageTabs ariaLabel="Visualização das escalas" activeId={scheduleTab} onChange={value => setSearchParams(value === 'open' ? {} : { tab: value })} tabs={[{ id: 'open', label: 'Escala Atual', badge: `Semana ativa · ${openSchedules.length}` }, { id: 'extra', label: 'Escala extra', controls: 'extra-schedules-panel' }, { id: 'history', label: 'Histórico', badge: `${historicalSchedules.length} cultos` }]}/>
+    {scheduleTab === 'extra' ? <ExtraSchedulesPanel /> : <>
     {role === 'team' && <p className="rounded-xl border border-[#E5DDCF] bg-white px-4 py-3 text-sm text-[#68645C]">Você pode consultar as escalas. A criação e as alterações são feitas pelo administrador.</p>}
     {error && <p role="alert" className="status-negative rounded-lg border px-3 py-2 text-sm">{error}</p>}
     {notice && <p role="status" className="status-positive rounded-lg border px-3 py-2 text-sm">{notice}</p>}
@@ -381,11 +395,11 @@ export function SchedulePage() {
               {isEditing ? <Check size={15}/> : <Pencil size={15}/>}{isEditing ? 'Concluir edição' : 'Editar escala'}
             </button>
             {!!schedule.assignments.length && <button type="button" disabled={saving} onClick={() => void publishSchedule(schedule)} className="min-h-10 flex-1 rounded-lg bg-[#8A6729] px-3 py-2 text-xs font-semibold text-white disabled:opacity-60 sm:flex-none">{schedule.published_at ? 'Publicar atualização' : 'Publicar escala'}</button>}
-            <button type="button" aria-label={`Excluir escala de ${schedule.service_label} em ${formatDate(schedule.service_date)}`} onClick={() => void deleteSchedule(schedule)} className="grid size-10 shrink-0 place-items-center rounded-lg text-[#8B3C32] hover:bg-red-50"><Trash2 size={16}/></button>
+            <button type="button" aria-label={`Excluir escala de ${schedule.service_label} em ${formatDate(schedule.service_date)}`} onClick={() => { setDeleteError(''); setScheduleToDelete(schedule) }} className="grid size-10 shrink-0 place-items-center rounded-lg text-[#8B3C32] hover:bg-red-50"><Trash2 size={16}/></button>
           </div>}
         </header>
         {isExpanded && <>
-          {schedule.special_observation && <aside aria-label="Observação específica da escala" className="mx-4 mt-4 rounded-xl border border-[#E3D3A7] bg-[#FBF6E9] p-4 sm:mx-5"><p className="flex items-center gap-2 text-sm font-semibold text-[#6B4F1D]"><MessageSquareText size={16}/>Observação desta escala</p><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-[#4E493F]">{schedule.special_observation}</p></aside>}
+          {schedule.special_observation && <aside aria-label="Observação específica da escala" className="mx-4 my-5 rounded-xl border border-[#F0CDCA] bg-[#FFF3F2] px-4 py-5 sm:mx-5 sm:px-5"><p className="flex items-center gap-2.5 text-sm font-semibold text-[#963F38]"><MessageSquareText size={17} className="shrink-0"/>Observação desta escala</p><p className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-[#713F3A]">{schedule.special_observation}</p></aside>}
           {isEditing && <p className="border-t border-[#EEE8DC] bg-[#FFFDF9] px-4 py-2.5 text-xs leading-5 text-[#68645C] sm:px-5">Modo de edição ativo. Ao terminar, publique a escala ou a atualização para avisar os voluntários.</p>}
           <div className="divide-y divide-[#EEE8DC]">{[
             { title: 'Funções principais', roles: primaryRoles, assignable: true },
@@ -443,5 +457,7 @@ export function SchedulePage() {
         </>}
       </section>
     })}</div>}
+    </>}
+    {scheduleToDelete && <DeleteScheduleDialog description={`Excluir a escala ${scheduleToDelete.service_label} de ${formatDate(scheduleToDelete.service_date)} e todas as atribuições?`} deleting={deleting} error={deleteError} onCancel={() => setScheduleToDelete(null)} onConfirm={() => void deleteSchedule(scheduleToDelete)}/>}
   </div>
 }

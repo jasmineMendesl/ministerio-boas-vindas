@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { sendPushToUsers } from '../_shared/web-push.ts'
+import { groupVolunteerRoles, scheduleNotification } from '../_shared/schedule-notifications.ts'
 
 function normalizeOrigin(value: string) {
   try {
@@ -60,17 +61,15 @@ Deno.serve(async request => {
   if (eventError || !event || event.closed_at) return json({ error: 'Edição aberta não encontrada.' }, 404)
 
   const { data: agenda, error: agendaError } = await client.from('pertencer_agenda_items')
-    .select('volunteer_profile_id').eq('event_id', event.id)
+    .select('volunteer_profile_id,title').eq('event_id', event.id)
   if (agendaError) return json({ error: 'Não foi possível localizar os voluntários escalados.' }, 503)
-  const recipients = [...new Set((agenda ?? []).map(item => item.volunteer_profile_id).filter((id): id is string => typeof id === 'string'))]
-  if (!recipients.length) return json({ ok: true, sent: 0, recipients: 0, configured: true })
+  const recipients = groupVolunteerRoles((agenda ?? []).map(item => ({ volunteer_profile_id: item.volunteer_profile_id, role: item.title })))
+  if (!recipients.size) return json({ ok: true, sent: 0, recipients: 0, configured: true })
 
-  const eventDate = new Date(`${event.event_date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
-  const delivery = await sendPushToUsers(client, recipients, {
-    title: 'Projeto Pertencer: equipe escalada',
-    body: `Você está escalado para ${event.title}, em ${eventDate}. Acesse o roteiro para conferir sua responsabilidade.`,
+  const deliveries = await Promise.all([...recipients].map(([profileId, roles]) => sendPushToUsers(client, [profileId], {
+    ...scheduleNotification({ kind: 'pertencer', roles }),
     url: './#/pertencer',
     tag: `pertencer-event-${event.id}`,
-  })
-  return json({ ok: true, sent: delivery.sent, recipients: recipients.length, configured: delivery.configured })
+  })))
+  return json({ ok: true, sent: deliveries.reduce((sum, delivery) => sum + delivery.sent, 0), recipients: recipients.size, configured: deliveries.every(delivery => delivery.configured) })
 })

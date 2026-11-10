@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { sendPushToUsers } from '../_shared/web-push.ts'
+import { groupVolunteerRoles, scheduleNotification } from '../_shared/schedule-notifications.ts'
 
 function normalizeOrigin(value: string) {
   try {
@@ -57,17 +58,14 @@ Deno.serve(async (request) => {
 
   const { data: schedule, error: scheduleError } = await client.from('ministry_schedules').select('id,service_date,service_label,published_at,special_observation').eq('id', body.scheduleId).maybeSingle()
   if (scheduleError || !schedule?.published_at) return json({ error: 'A escala não está publicada.' }, 409)
-  const { data: assignments, error: assignmentsError } = await client.from('ministry_schedule_assignments').select('volunteer_profile_id').eq('schedule_id', schedule.id)
+  const { data: assignments, error: assignmentsError } = await client.from('ministry_schedule_assignments').select('volunteer_profile_id,ministry_role').eq('schedule_id', schedule.id)
   if (assignmentsError) return json({ error: 'Não foi possível localizar os voluntários.' }, 503)
 
-  const date = new Date(`${schedule.service_date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })
-  const result = await sendPushToUsers(client, (assignments ?? []).map(item => item.volunteer_profile_id), {
-    title: 'Nova escala publicada',
-    body: schedule.special_observation?.trim()
-      ? 'ESSA ESCALA É DIFERENTE, CLIQUE PARA LER'
-      : `Você está escalado para ${schedule.service_label}, em ${date}. Acesse o sistema para ver sua função.`,
+  const recipients = groupVolunteerRoles((assignments ?? []).map(item => ({ volunteer_profile_id: item.volunteer_profile_id, role: item.ministry_role })))
+  const deliveries = await Promise.all([...recipients].map(([profileId, roles]) => sendPushToUsers(client, [profileId], {
+    ...scheduleNotification({ kind: 'service', name: schedule.service_label, roles, observation: schedule.special_observation }),
     url: `./#/escala?schedule=${encodeURIComponent(schedule.id)}`,
     tag: `ministry-schedule-${schedule.id}`,
-  })
-  return json({ ok: true, sent: result.sent, configured: result.configured })
+  })))
+  return json({ ok: true, sent: deliveries.reduce((sum, delivery) => sum + delivery.sent, 0), configured: deliveries.every(delivery => delivery.configured) })
 })

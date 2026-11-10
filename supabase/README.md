@@ -50,6 +50,14 @@ Perfis existentes são preservados; usuários Auth sem perfil recebem `team`. Pa
 
 ## Notificações push em segundo plano
 
+A aba **Escala extra** usa as migrations `202611100001_extra_schedules.sql` e `202611100003_extra_schedule_members_and_time.sql`: título, data, horário, quantidade de membros necessários, equipe selecionada e observação opcional. Administradores cadastram e editam; membros ativos consultam. Ao salvar, a função `notify-extra-schedule` envia push somente aos membros selecionados que continuam ativos e possuem inscrições habilitadas. O aviso abre `/escala?tab=extra`. Se o envio falhar, o cadastro permanece salvo e o administrador pode usar **Notificar equipe** para tentar novamente. Cadastros antigos precisam ser editados para informar horário e equipe antes de notificar.
+
+Para ativar essa funcionalidade no projeto Supabase vinculado, execute `npm run db:push` e `npx supabase functions deploy notify-extra-schedule`, usando os secrets VAPID e a lista `VISITOR_ALLOWED_ORIGINS` já configurados para as notificações existentes. Valide o banco localmente com `node scripts/verify-extra-schedules.mjs`.
+
+A migration `202611100002_extra_schedule_delete.sql` habilita a exclusão das escalas extras somente para administradores. A exclusão das escalas comuns e extras exige confirmação dentro da página e só é informada como concluída quando o banco retorna o registro excluído.
+
+As mensagens das três escalas usam o mesmo padrão em `_shared/schedule-notifications.ts`. Cultos e Projeto Pertencer notificam cada voluntário com suas próprias funções em um único aviso. Escalas extras informam nome e horário. Quando houver observação, o aviso acrescenta “Atenção: essa escala tem observação.” sem substituir a mensagem da atribuição. Para publicar todas as alterações, aplique `npm run db:push` e execute `npm run functions:deploy:notifications`.
+
 A migration `202611060003_background_web_push.sql` cria as inscrições privadas por dispositivo e adiciona o estado de publicação das escalas. O cadastro público e o registro de novas decisões notificam somente perfis admin ativos que ativaram push; a publicação da escala notifica somente os voluntários atribuídos. Os avisos de visitante e decisão são genéricos e não incluem dados pessoais.
 
 Configure `VAPID_PUBLIC_KEY` e `VAPID_PRIVATE_KEY` como secrets das Edge Functions do Supabase. A chave pública fica em `src/lib/push-config.ts` e pode ser distribuída ao navegador; a chave privada nunca deve ir ao frontend ou ao GitHub. Publique as funções com `npm run functions:deploy:notifications`. Os usuários precisam ativar as notificações no dispositivo. Em iPhone/iPad, o site precisa ser adicionado à Tela de Início para receber Web Push.

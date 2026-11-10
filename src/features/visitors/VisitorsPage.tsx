@@ -48,7 +48,7 @@ export function VisitorsPage() {
   const [month, setMonth] = useState(new Date().getMonth() + 1)
   const [year, setYear] = useState(new Date().getFullYear())
   const [serviceDay, setServiceDay] = useState<ServiceDayFilter>('all')
-  const [visitorSource, setVisitorSource] = useState<VisitorSourceFilter>('qr')
+  const [visitorSource, setVisitorSource] = useState<VisitorSourceFilter>('all')
   const [showManualForm, setShowManualForm] = useState(false)
   const [manualName, setManualName] = useState('')
   const [manualPhone, setManualPhone] = useState('')
@@ -102,8 +102,8 @@ export function VisitorsPage() {
   const paginatedGiftReports = giftReports.slice((currentGiftPage - 1) * giftPageSize, currentGiftPage * giftPageSize)
   const giftFirstVisible = giftReports.length ? (currentGiftPage - 1) * giftPageSize + 1 : 0
   const giftLastVisible = Math.min(currentGiftPage * giftPageSize, giftReports.length)
-  const qrRegistrations = people.reduce((total, person) => total + person.visits.filter(visit => visit.source === 'qr').length, 0)
-  const fillRate = bookmarksDelivered > 0 ? Math.round((qrRegistrations / bookmarksDelivered) * 100) : 0
+  const visitorRegistrations = people.reduce((total, person) => total + person.visits.length, 0)
+  const fillRate = bookmarksDelivered > 0 ? Math.round((visitorRegistrations / bookmarksDelivered) * 100) : 0
 
   async function loadVisitors() {
     if (!supabase || !session?.user.id) {
@@ -255,7 +255,10 @@ export function VisitorsPage() {
     })
     if (visitError) { setFormError('Não foi possível salvar o cadastro. Confira sua conexão e as permissões do perfil.'); return }
     await loadVisitors()
-    setNotice('Cadastro e visita registrados no Supabase.')
+    setNotice('Cadastro e visita registrados no Supabase e incluídos na contagem de preenchimentos.')
+    setVisitorSource('all')
+    setActiveVisitorTab('visitors')
+    setSearchParams({}, { replace: true })
     setManualName(''); setManualPhone(''); setManualVisitedOn(localDateInput()); setManualPrayerRequest(''); setManualContactConsent(false); setShowManualForm(false)
   }
 
@@ -347,11 +350,11 @@ export function VisitorsPage() {
 
     <section aria-label="Indicadores de visitantes" className="grid gap-2.5 sm:grid-cols-3">
       <MetricCard icon={Bookmark} label="Mimos reportados" value={bookmarksDelivered} helper="Soma dos fechamentos de culto"/>
-      <MetricCard icon={QrCode} label="Cadastros via QR Code" value={qrRegistrations} helper="Cadastros recebidos pelo formulário"/>
-      <MetricCard icon={UsersRound} label="Taxa de Preenchimento" value={`${fillRate}%`} helper="Formulários QR ÷ mimos entregues"/>
+      <MetricCard icon={QrCode} label="Cadastros de visitantes" value={visitorRegistrations} helper="Formulário QR Code e cadastro da equipe"/>
+      <MetricCard icon={UsersRound} label="Taxa de Preenchimento" value={`${fillRate}%`} helper="Cadastros QR e equipe ÷ mimos entregues"/>
     </section>
 
-    <PageTabs ariaLabel="Seções de visitantes" activeId={activeVisitorTab} onChange={value => { setActiveVisitorTab(value); if (value === 'gifts') setSearchParams({ tab: 'gifts' }, { replace: true }); else setSearchParams({}, { replace: true }) }} tabs={[{ id: 'gifts', label: 'Fechamento de mimos', controls: 'gift-reports-panel' }, { id: 'visitors', label: 'Visitantes do QR Code', controls: 'visitors-panel' }]}/>
+    <PageTabs ariaLabel="Seções de visitantes" activeId={activeVisitorTab} onChange={value => { setActiveVisitorTab(value); if (value === 'gifts') setSearchParams({ tab: 'gifts' }, { replace: true }); else setSearchParams({}, { replace: true }) }} tabs={[{ id: 'gifts', label: 'Fechamento de mimos', controls: 'gift-reports-panel' }, { id: 'visitors', label: 'Visitantes cadastrados', controls: 'visitors-panel' }]}/>
 
     {activeVisitorTab === 'gifts' && <section id="gift-reports-panel" role="tabpanel" aria-labelledby="gift-report-title" className="overflow-hidden rounded-xl border border-[#E5DDCF] bg-white shadow-[0_2px_7px_rgba(0,0,0,.025)]">
       <div className="flex flex-col gap-3 border-b border-[#F7F2E8] p-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 id="gift-report-title" className="flex items-center gap-2 text-sm font-semibold"><CalendarDays size={17} className="text-[#8A6729]"/>Fechamento de mimos por culto</h2><p className="mt-1 text-xs text-[#68645C]">O líder, entre os 6 voluntários do culto, informa a data e a quantidade entregue. O sistema identifica quem registrou.</p></div><Button type="button" size="sm" onClick={() => { setGiftReportError(''); setGiftReportDate(localDateInput()); setShowGiftReport(true) }} className="h-9 self-start rounded-lg bg-[#8A6729] px-3 text-xs hover:bg-[#6B4F1D] sm:self-auto"><Plus size={14}/> Registrar fechamento</Button></div>
