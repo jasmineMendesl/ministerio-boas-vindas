@@ -4,6 +4,7 @@ import QRCode from 'qrcode'
 import { Bookmark, CalendarDays, Check, ClipboardCopy, Eye, MessageSquare, Pencil, Plus, QrCode, Search, Trash2, UserRound, UsersRound, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '../../components/ui/button'
+import { PageHeader } from '../../components/PageHeader'
 import { useAuth } from '../../app/AuthProvider'
 import { supabase } from '../../lib/supabase'
 import { buildPublicVisitorUrl, filterVisitors, firstVisit, formatVisitorPhone, type VisitorPerson, type VisitorVisit } from './visitor-data'
@@ -100,8 +101,8 @@ export function VisitorsPage() {
   const paginatedGiftReports = giftReports.slice((currentGiftPage - 1) * giftPageSize, currentGiftPage * giftPageSize)
   const giftFirstVisible = giftReports.length ? (currentGiftPage - 1) * giftPageSize + 1 : 0
   const giftLastVisible = Math.min(currentGiftPage * giftPageSize, giftReports.length)
-  const qrRegistrations = people.filter(person => person.visits.some(visit => visit.source === 'qr')).length
-  const fillRate = people.length ? Math.round((people.filter(person => person.gifts.length > 0).length / people.length) * 100) : 0
+  const qrRegistrations = people.reduce((total, person) => total + person.visits.filter(visit => visit.source === 'qr').length, 0)
+  const fillRate = bookmarksDelivered > 0 ? Math.round((qrRegistrations / bookmarksDelivered) * 100) : 0
 
   async function loadVisitors() {
     if (!supabase || !session?.user.id) {
@@ -336,10 +337,7 @@ export function VisitorsPage() {
   const availableYears = Array.from({ length: 5 }, (_, index) => today.getFullYear() - index)
 
   return <div className="animate-in space-y-3.5 text-[#161616] sm:space-y-4">
-    <header className="flex flex-col justify-between gap-4 rounded-2xl border border-[#E5DDCF] bg-[linear-gradient(110deg,#fff_0%,#fff_72%,#F0E6D2_100%)] p-5 shadow-[0_3px_14px_rgba(0,0,0,.035)] sm:flex-row sm:items-center sm:px-7 sm:py-6">
-      <div><div className="flex flex-wrap items-center gap-2"><span className="inline-flex items-center gap-1.5 rounded-full bg-[#F0E6D2] px-3 py-1.5 text-xs font-semibold text-[#8A6729]"><UsersRound size={13}/>MÓDULO DE ACOLHIMENTO</span><span className="text-xs text-[#68645C]">· Dados do Supabase</span></div><h1 className="mt-3 text-2xl font-semibold leading-tight tracking-tight sm:text-3xl">Visitantes</h1><p className="mt-1 text-sm text-[#68645C]">Responsável pelo acolhimento das pessoas que visitam a igreja</p></div>
-      <Button size="sm" className="h-10 self-start rounded-lg bg-[#8A6729] px-4 text-sm hover:bg-[#6B4F1D] sm:self-auto" onClick={() => { setFormError(''); setShowManualForm(true) }}><Plus size={15}/> Cadastrar Visitante</Button>
-    </header>
+    <PageHeader icon={UsersRound} eyebrow="MÓDULO DE ACOLHIMENTO · DADOS DO SUPABASE" title="Visitantes" description="Responsável pelo acolhimento das pessoas que visitam a igreja." actions={<Button size="sm" className="h-10 rounded-lg bg-[#8A6729] px-4 text-sm hover:bg-[#6B4F1D]" onClick={() => { setFormError(''); setShowManualForm(true) }}><Plus size={15}/> Cadastrar Visitante</Button>}/>
 
     {visitorsLoading && <div role="status" className="rounded-lg border border-[#E5DDCF] bg-white px-3 py-2 text-xs text-[#68645C]">Carregando visitantes do Supabase...</div>}
     {visitorsError && <div role="alert" className="status-negative rounded-lg border px-3 py-2 text-xs">{visitorsError}</div>}
@@ -349,7 +347,7 @@ export function VisitorsPage() {
     <section aria-label="Indicadores de visitantes" className="grid gap-2.5 sm:grid-cols-3">
       <MetricCard icon={Bookmark} label="Mimos reportados" value={bookmarksDelivered} helper="Soma dos fechamentos de culto"/>
       <MetricCard icon={QrCode} label="Cadastros via QR Code" value={qrRegistrations} helper="Cadastros recebidos pelo formulário"/>
-      <MetricCard icon={UsersRound} label="Taxa de Preenchimento" value={`${fillRate}%`} helper="Pessoas com lembrancinha registrada"/>
+      <MetricCard icon={UsersRound} label="Taxa de Preenchimento" value={`${fillRate}%`} helper="Formulários QR ÷ mimos entregues"/>
     </section>
 
     <nav role="tablist" aria-label="Seções de visitantes" className="flex gap-1 rounded-xl border border-[#D9CCB2] bg-[#F0E6D2] p-1">

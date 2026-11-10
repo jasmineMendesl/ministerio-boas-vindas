@@ -55,7 +55,7 @@ Deno.serve(async (request) => {
   const { data: profile } = await client.from('profiles').select('role,active').eq('id', authData.user.id).maybeSingle()
   if (!profile?.active || profile.role !== 'admin') return json({ error: 'Apenas administradores podem publicar escalas.' }, 403)
 
-  const { data: schedule, error: scheduleError } = await client.from('ministry_schedules').select('id,service_date,service_label,published_at').eq('id', body.scheduleId).maybeSingle()
+  const { data: schedule, error: scheduleError } = await client.from('ministry_schedules').select('id,service_date,service_label,published_at,special_observation').eq('id', body.scheduleId).maybeSingle()
   if (scheduleError || !schedule?.published_at) return json({ error: 'A escala não está publicada.' }, 409)
   const { data: assignments, error: assignmentsError } = await client.from('ministry_schedule_assignments').select('volunteer_profile_id').eq('schedule_id', schedule.id)
   if (assignmentsError) return json({ error: 'Não foi possível localizar os voluntários.' }, 503)
@@ -63,8 +63,10 @@ Deno.serve(async (request) => {
   const date = new Date(`${schedule.service_date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })
   const result = await sendPushToUsers(client, (assignments ?? []).map(item => item.volunteer_profile_id), {
     title: 'Nova escala publicada',
-    body: `Você está escalado para ${schedule.service_label}, em ${date}. Acesse o sistema para ver sua função.`,
-    url: './#/escala',
+    body: schedule.special_observation?.trim()
+      ? 'ESSA ESCALA É DIFERENTE, CLIQUE PARA LER'
+      : `Você está escalado para ${schedule.service_label}, em ${date}. Acesse o sistema para ver sua função.`,
+    url: `./#/escala?schedule=${encodeURIComponent(schedule.id)}`,
     tag: `ministry-schedule-${schedule.id}`,
   })
   return json({ ok: true, sent: result.sent, configured: result.configured })

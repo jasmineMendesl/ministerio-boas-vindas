@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { CalendarDays, CheckCircle2, Coffee, MoreVertical, Pencil, Plus, Search, Trash2, UsersRound, X, XCircle, Clock3, Save, ClipboardList } from 'lucide-react'
 import { useAuth } from '../../app/AuthProvider'
 import { supabase } from '../../lib/supabase'
+import { PageHeader } from '../../components/PageHeader'
 import { editableInvitationStatuses, invitationStatusLabels, invitationStatusTones, type InvitationStatus } from './invitation-status'
 
 type Invitation = { id: string; followUpId: string; name: string; phone: string; decision: string; decisionDate: string; confirmation: InvitationStatus; attended: boolean }
@@ -174,9 +175,20 @@ export function PertencerPage() {
     setSavingAgenda(true); setError(''); setNotice('')
     const rows = agendaItems.map((title, index) => ({ event_id: event.id, sequence: index + 1, title, volunteer_profile_id: assignments[index + 1] || null }))
     const { error: saveError } = await supabase.from('pertencer_agenda_items').upsert(rows, { onConflict: 'event_id,sequence' })
+    if (saveError) { setSavingAgenda(false); setError('Não foi possível salvar as atribuições do roteiro.'); return }
+    const { data: notification, error: notificationError } = await supabase.functions.invoke('notify-pertencer-volunteers', { body: { eventId: event.id } })
     setSavingAgenda(false)
-    if (saveError) { setError('Não foi possível salvar as atribuições do roteiro.'); return }
-    setNotice('Roteiro salvo para esta edição.')
+    if (!notificationError && notification?.recipients === 0) {
+      setNotice('Roteiro salvo. Ainda não há voluntários atribuídos para notificar nesta edição.')
+    } else if (notificationError) {
+      setNotice('Roteiro salvo. Não foi possível enviar os avisos agora; a equipe pode consultar o Projeto Pertencer no sistema.')
+    } else if (!notification?.configured) {
+      setNotice('Roteiro salvo. As notificações push precisam ser configuradas no Supabase.')
+    } else if (!notification.sent) {
+      setNotice('Roteiro salvo. Nenhum voluntário escalado ativou notificações neste dispositivo.')
+    } else {
+      setNotice(`Roteiro salvo e aviso enviado para ${notification.sent} dispositivo(s).`)
+    }
   }
 
   async function createEvent(eventForm: FormEvent<HTMLFormElement>) {
@@ -284,10 +296,7 @@ export function PertencerPage() {
     {role === 'team' && <div role="status" className="rounded-lg border border-[#E5DDCF] bg-white px-3 py-2 text-xs text-[#34322E]">Acesso de visualização: a equipe pode consultar esta tela, mas não criar nem alterar dados do Projeto Pertencer.</div>}
     {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
     {notice && <div role="status" className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">{notice}</div>}
-    <header className="flex flex-col justify-between gap-4 rounded-2xl border border-[#E5DDCF] bg-[linear-gradient(110deg,#fff_0%,#fff_72%,#F0E6D2_100%)] p-5 shadow-[0_3px_14px_rgba(0,0,0,.035)] sm:flex-row sm:items-center sm:px-7 sm:py-6">
-      <div><div className="flex flex-wrap items-center gap-2"><span className="inline-flex items-center gap-1.5 rounded-full bg-[#F0E6D2] px-3 py-1.5 text-xs font-semibold text-[#8A6729]"><Coffee size={13}/>MÓDULO PERTENCER</span><span className="text-xs text-[#68645C]">· Conectado ao Supabase</span></div><h1 className="mt-3 text-2xl font-semibold tracking-tight text-[#161616] sm:text-3xl">Projeto Pertencer</h1><p className="mt-1 text-sm text-[#68645C]">Café de integração e fraternidade</p></div>
-      <div className="flex items-center gap-3 rounded-xl border border-[#E5DDCF] bg-white/90 p-3 sm:min-w-[220px]"><span className="grid size-11 place-items-center rounded-xl bg-[#F0E6D2] text-[#B08A3E]"><CalendarDays size={19}/></span><div><p className="text-xs text-[#68645C]">Próxima edição</p><p className="mt-1 text-sm font-semibold">{event ? formatDate(event.event_date) : 'Não agendada'}</p></div></div>
-    </header>
+    <PageHeader icon={Coffee} eyebrow="MÓDULO PERTENCER · CONECTADO AO SUPABASE" title="Projeto Pertencer" description="Café de integração e fraternidade." actions={<div className="flex items-center gap-3 sm:pl-5"><span className="grid size-10 place-items-center rounded-xl bg-[#F0E6D2] text-[#8A6729]"><CalendarDays size={18}/></span><div><p className="text-xs text-[#81796D]">Próxima edição</p><p className="mt-1 text-sm font-semibold text-[#29251E]">{event ? formatDate(event.event_date) : 'Não agendada'}</p></div></div>}/>
     <section className="rounded-2xl border border-[#D9CCB2] bg-white p-4 shadow-[0_3px_14px_rgba(0,0,0,.035)] sm:p-6">
       <div className="flex items-start justify-between gap-2 border-b border-[#E5DDCF] pb-4"><div className="min-w-0"><p className="flex items-center gap-2 text-xs font-medium text-[#8A6729]"><CalendarDays size={15}/>{event?.title ?? 'Edição do Projeto Pertencer'}</p><h2 className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">{event ? `Próximo Café: ${formatDate(event.event_date)}` : 'Nenhuma edição futura cadastrada'}</h2></div>{isAdmin && event && <details className="group relative shrink-0"><summary aria-label="Ações da edição" title="Ações da edição" className="grid size-10 cursor-pointer list-none place-items-center rounded-lg border border-[#E5DDCF] bg-white text-[#34322E] hover:bg-[#FBF9F4] [&::-webkit-details-marker]:hidden"><MoreVertical size={19}/></summary><div className="absolute right-0 top-11 z-20 min-w-52 rounded-xl border border-[#E5DDCF] bg-white p-1.5 shadow-xl"><button type="button" onClick={() => { setShowDecisionPicker(true); setDecisionSearch(''); void loadDecisionCandidates() }} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-[#6B4F1D] hover:bg-[#F7F2E8]"><Plus size={15}/>Adicionar decisão</button><button type="button" onClick={startEventEdit} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-[#34322E] hover:bg-[#F7F2E8]"><Pencil size={15}/>Editar edição</button><button type="button" onClick={() => { setEventActionError(''); setConfirmDeleteEvent(true) }} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-[#9B3B32] hover:bg-[#FFF1EF]"><Trash2 size={15}/>Excluir edição</button><button type="button" onClick={() => { setError(''); setConfirmCloseEvent(true) }} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-[#9B3B32] hover:bg-[#FFF1EF]"><XCircle size={15}/>Encerrar edição</button></div></details>}</div>
       <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6 sm:gap-3"><Metric icon={UsersRound} label="Convidados" value={counts.all} color="status-neutral"/><Metric icon={Clock3} label="Pendente" value={counts.pending} color="status-pending"/><Metric icon={Clock3} label="Não respondido" value={counts.no_response} color="status-pending"/><Metric icon={XCircle} label="Não vai comparecer" value={counts.declined} color="status-negative"/><Metric icon={CheckCircle2} label="Vai comparecer" value={counts.confirmed} color="status-positive"/><Metric icon={CheckCircle2} label="Compareceu" value={counts.present} color="status-positive"/></div>

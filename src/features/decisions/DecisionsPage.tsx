@@ -2,6 +2,7 @@
 import { useNavigate, Outlet } from 'react-router-dom'
 import { ArrowLeft, CalendarDays, Heart, MessageCircle, Pencil, Search, Share2, Sparkles, Trash2, UsersRound, X } from 'lucide-react'
 import { Button } from '../../components/ui/button'
+import { PageHeader } from '../../components/PageHeader'
 import { addDecision, type DecisionRecord, type DecisionType } from './decision-data'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../app/AuthProvider'
@@ -204,9 +205,7 @@ export function DecisionsPage() {
   }
 
   return <div className="animate-in min-w-0 space-y-4 text-[#161616] sm:space-y-5">
-    <header className="min-w-0 rounded-2xl border border-[#E5DDCF] bg-[linear-gradient(110deg,#fff_0%,#fff_72%,#F0E6D2_100%)] px-4 py-4 shadow-[0_4px_18px_rgba(0,0,0,.04)] sm:px-6 sm:py-5">
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-5"><div className="min-w-0"><div className="mb-2 flex flex-wrap items-center gap-2"><span className="rounded-full bg-[#F0E6D2] px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-[#8A6729]">✦ Módulo pastoral</span><span className="text-xs text-[#68645C]">· Dados do Supabase</span></div><h1 className="text-[22px] font-semibold leading-tight tracking-[-.035em] sm:text-[29px]">Decisões de Fé e Vidas Transformadas</h1><p className="mt-1.5 text-xs leading-5 text-[#68645C] sm:text-sm sm:italic">“Digo-vos que assim haverá alegria no céu por um pecador que se arrepende.” <span className="not-italic">— Lucas 15:7</span></p></div><div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0"><Button onClick={() => navigate('/decisoes/nova')} size="sm" className="h-10 min-w-0 flex-1 rounded-lg bg-[#8A6729] px-3 text-sm sm:flex-none sm:px-4"><Heart size={15} fill="currentColor"/> Registrar Nova Decisão</Button><Button type="button" variant="outline" size="icon" onClick={shareScreen} aria-label="Copiar link da tela" title="Copiar link desta tela" className="size-10 shrink-0 rounded-lg bg-white"><Share2 size={15}/></Button></div></div>
-    </header>
+    <PageHeader eyebrow="MÓDULO PASTORAL · DADOS DO SUPABASE" title="Decisões de Fé e Vidas Transformadas" description="“Digo-vos que assim haverá alegria no céu por um pecador que se arrepende.” — Lucas 15:7" actions={<><Button onClick={() => navigate('/decisoes/nova')} size="sm" className="h-10 min-w-0 rounded-lg bg-[#8A6729] px-3 text-sm sm:px-4"><Heart size={15} fill="currentColor"/>Registrar Nova Decisão</Button><Button type="button" variant="outline" size="icon" onClick={shareScreen} aria-label="Copiar link da tela" title="Copiar link desta tela" className="size-10 shrink-0 rounded-lg bg-white"><Share2 size={15}/></Button></>}/>
 
     {notice && <div role="status" className="flex items-start justify-between gap-3 rounded-xl border border-[#F0E6D2] bg-white px-3 py-2.5 text-xs"><span>{notice}</span><button type="button" aria-label="Fechar aviso" onClick={() => setNotice('')}><X size={14}/></button></div>}
     {loading && <div role="status" className="rounded-xl border border-[#E5DDCF] bg-white px-3 py-2 text-xs text-[#68645C]">Carregando decisões do Supabase...</div>}
@@ -302,12 +301,7 @@ export function DecisionRegistrationPage() {
   }
 
   return <main className="animate-in mx-auto w-full min-w-0 max-w-3xl space-y-4 text-[#161616] sm:space-y-5">
-    <Button type="button" variant="outline" size="sm" onClick={() => navigate('/decisoes')} className="min-h-10 rounded-lg px-3 text-sm"><ArrowLeft size={15}/> Voltar para decisões</Button>
-    <header className="rounded-2xl border border-[#E5DDCF] bg-[linear-gradient(110deg,#fff_0%,#fff_72%,#F0E6D2_100%)] p-4 shadow-[0_4px_18px_rgba(0,0,0,.04)] sm:p-7">
-      <span className="rounded-full bg-[#F0E6D2] px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-[#8A6729]">Módulo pastoral</span>
-      <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Registrar nova decisão</h1>
-      <p className="mt-2 text-sm text-[#68645C]">Registre a decisão e inicie o acompanhamento da pessoa.</p>
-    </header>
+    <PageHeader eyebrow="MÓDULO PASTORAL" title="Registrar nova decisão" description="Registre a decisão e inicie o acompanhamento da pessoa." actions={<Button type="button" variant="outline" size="sm" onClick={() => navigate('/decisoes')} className="min-h-10 rounded-lg px-3 text-sm"><ArrowLeft size={15}/> Voltar para decisões</Button>}/>
     <form onSubmit={submitDecision} className="min-w-0 space-y-5 rounded-2xl border border-[#E5DDCF] bg-white p-4 shadow-[0_4px_14px_rgba(0,0,0,.04)] sm:p-7">
       <label className="block text-sm font-medium">Nome completo <span className="text-red-600">*</span><input className="form-input mt-2 h-11 text-sm" autoComplete="name" maxLength={120} required value={name} onChange={event => setName(event.target.value)} placeholder="Nome completo da pessoa"/></label>
       <div className="grid gap-4 sm:grid-cols-2">

@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthGate } from './AuthGate'
+import { useAuth } from './AuthProvider'
 import { AppLayout } from '../components/AppLayout'
 import { SignInPage } from '../features/auth/SignInPage'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
@@ -8,6 +9,12 @@ import { DecisionRegistrationPage, DecisionsModule, DecisionsPage } from '../fea
 import { PertencerPage } from '../features/pertencer/PertencerPage'
 import { PublicVisitorPage } from '../features/visitors/PublicVisitorPage'
 import { SchedulePage } from '../features/schedule/SchedulePage'
+import { ReportsPage } from '../features/reports/ReportsPage'
+
+function AdminReportsRoute() {
+  const { role } = useAuth()
+  return role === 'admin' ? <ReportsPage /> : <Navigate to="/" replace />
+}
 
 export function App() {
   return (
@@ -24,6 +31,7 @@ export function App() {
           </Route>
           <Route path="/pertencer" element={<PertencerPage />} />
           <Route path="/escala" element={<SchedulePage />} />
+          <Route path="/relatorios" element={<AdminReportsRoute />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
