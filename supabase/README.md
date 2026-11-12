@@ -1,5 +1,11 @@
 # Migrations do Supabase
 
+## Permissões de visitantes
+
+A migration `202611120001_admin_only_visitor_edit_delete.sql` restringe a edição e a exclusão de visitantes a administradores, nas funções RPC e nas políticas RLS. O perfil `team` continua podendo cadastrar visitantes, visualizar os dados e salvar observações internas. Os dados da pessoa vinculada ao visitante também ficam protegidos contra alterações diretas; cadastrar uma decisão com o mesmo telefone preserva o nome do visitante para `team`.
+
+Para ativar no banco remoto, aplique as migrations com `npm run db:push` e publique o frontend atualizado. Para verificar as permissões localmente, execute `node scripts/verify-visitor-permissions.mjs`.
+
 ## Campos adicionais no formulário público
 
 A migration `202611050002_visitor_service_details.sql` adiciona a data do culto e o consentimento de contato à tabela `visitors`. Os pedidos de oração ficam em `visitor_prayer_requests`, com RLS habilitado e leitura restrita aos perfis admin e pastoral. A Edge Function atualizada chama uma RPC privada; aplique essa migration antes de publicar a nova versão da função e do frontend.

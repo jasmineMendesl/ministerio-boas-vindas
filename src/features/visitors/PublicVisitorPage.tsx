@@ -58,9 +58,10 @@ export function PublicVisitorPage() {
       <span aria-hidden="true" className="welcome-orbit welcome-orbit-one" />
       <span aria-hidden="true" className="welcome-orbit welcome-orbit-two" />
       <div className="relative mx-auto max-w-[1080px] px-[22px] pb-8 pt-7 sm:px-8 sm:pb-12 sm:pt-9 lg:px-12 lg:pb-14">
-        <div className="flex items-center gap-3">
-          <span className="grid size-[40px] place-items-center rounded-[14px] bg-white/10 font-serif text-[19px]">B</span>
-          <span className="leading-tight"><strong className="block text-[14px] font-semibold">Ministério de</strong><span className="mt-1 block text-[12px] text-white/75">Boas-Vindas</span></span>
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+          <div className="h-20 w-32 overflow-hidden mix-blend-lighten sm:h-24 sm:w-40">
+            <img src={`${import.meta.env.BASE_URL}logos/adlago.jpeg`} alt="Igreja ADLago" width={1280} height={1280} className="h-full w-full scale-[1.65] object-cover" />
+          </div>
         </div>
         <div className="mt-9 max-w-[550px] sm:mt-12">
           <span className="inline-flex h-[31px] items-center gap-2 rounded-full border border-white/20 px-3 text-[12px] text-white/90"><Leaf size={14} strokeWidth={1.7}/>Um lugar para você</span>
