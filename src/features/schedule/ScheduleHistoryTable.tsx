@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Download, MessageSquareText, UsersRound } from 'lucide-react'
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Download, MessageSquareText, Trash2, UsersRound } from 'lucide-react'
 
 type HistoryVolunteer = { display_name: string }
 type HistoryAssignment = { id: string; volunteer_profile_id: string; ministry_role: string; volunteer?: HistoryVolunteer }
@@ -20,6 +20,7 @@ type Props = {
   schedules: HistorySchedule[]
   expandedScheduleIds: string[]
   onToggleSchedule: (scheduleId: string) => void
+  onDeleteSchedule?: (scheduleId: string) => void
 }
 
 const mainRoles: Record<string, string> = { portaria: 'Portaria', seat_direction: 'Direcionamento de assentos' }
@@ -34,9 +35,9 @@ function monthLabel(month: string) {
   return new Date(`${month}-15T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
 }
 
-export function ScheduleHistoryTable({ canViewAttendance = false, schedules, expandedScheduleIds, onToggleSchedule }: Props) {
+export function ScheduleHistoryTable({ canViewAttendance = false, schedules, expandedScheduleIds, onToggleSchedule, onDeleteSchedule }: Props) {
   const columns = canViewAttendance
-    ? 'grid-cols-[95px_minmax(180px,1.4fr)_minmax(120px,1fr)_120px_75px_115px_110px]'
+    ? 'grid-cols-[95px_minmax(180px,1.4fr)_minmax(120px,1fr)_120px_75px_115px_160px]'
     : 'grid-cols-[95px_minmax(180px,1.4fr)_minmax(120px,1fr)_120px_115px_110px]'
   const months = useMemo(() => [...new Set(schedules.map(schedule => schedule.service_date.slice(0, 7)))].sort().reverse(), [schedules])
   const [month, setMonth] = useState('')
@@ -53,6 +54,7 @@ export function ScheduleHistoryTable({ canViewAttendance = false, schedules, exp
     .sort((a, b) => b.service_date.localeCompare(a.service_date) || a.service_label.localeCompare(b.service_label))
   const pageSize = 8
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
+  useEffect(() => { setPage(current => Math.min(current, pageCount)) }, [pageCount])
   const pageSchedules = filtered.slice((page - 1) * pageSize, page * pageSize)
   const publishedCount = monthSchedules.filter(schedule => schedule.published_at).length
   const averageTeam = monthSchedules.length
@@ -120,7 +122,7 @@ export function ScheduleHistoryTable({ canViewAttendance = false, schedules, exp
             <span><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${schedule.published_at ? 'bg-emerald-50 text-emerald-800' : 'bg-[#FBF9F4] text-[#68645C]'}`}><UsersRound size={12}/>{volunteerCount} voluntários</span></span>
             {canViewAttendance && <span className={absenceCount ? 'font-semibold text-[#A2483E]' : 'text-[#81796D]'}>{absenceCount}</span>}
             <span className={schedule.visitorsReported === null ? 'text-sm text-[#81796D]' : 'text-sm font-medium text-[#6B4F1D]'}>{schedule.visitorsReported === null ? 'Em andamento' : `${schedule.visitorsReported} pessoas`}</span>
-            <span className="text-right"><button type="button" aria-expanded={expanded} onClick={() => onToggleSchedule(schedule.id)} className="whitespace-nowrap text-sm font-medium text-[#7B571F] hover:underline">{expanded ? 'Fechar' : 'Ver escala'} <span aria-hidden="true">→</span></button></span>
+            <span className="flex items-center justify-end gap-2"><button type="button" aria-expanded={expanded} onClick={() => onToggleSchedule(schedule.id)} className="whitespace-nowrap text-sm font-medium text-[#7B571F] hover:underline">{expanded ? 'Fechar' : 'Ver escala'} <span aria-hidden="true">→</span></button>{onDeleteSchedule && <button type="button" title="Excluir escala" aria-label={`Excluir escala do histórico de ${schedule.service_label} em ${schedule.service_date}`} onClick={() => onDeleteSchedule(schedule.id)} className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-lg text-[#8B3C32] hover:bg-red-50"><Trash2 size={16}/></button>}</span>
           </div>
           {expanded && <div className="mb-3 overflow-hidden rounded-xl border border-[#E5DDCF] bg-white">
             {schedule.special_observation && <aside className="border-b border-[#EEE8DC] bg-[#FBF6E9] p-4"><p className="flex items-center gap-2 text-sm font-semibold text-[#6B4F1D]"><MessageSquareText size={16}/>Observação desta escala</p><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-[#4E493F]">{schedule.special_observation}</p></aside>}
