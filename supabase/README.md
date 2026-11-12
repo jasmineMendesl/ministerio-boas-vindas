@@ -2,6 +2,8 @@
 
 ## Permissões de visitantes
 
+A migration `202611120002_admin_only_schedule_attendance.sql` restringe também a consulta de presenças e faltas aos administradores ativos. Team continua consultando escalas publicadas e suas funções, sem dados de presença ou contagem de faltas. Valide essa restrição com `node scripts/verify-attendance-permissions.mjs`.
+
 A migration `202611120001_admin_only_visitor_edit_delete.sql` restringe a edição e a exclusão de visitantes a administradores, nas funções RPC e nas políticas RLS. O perfil `team` continua podendo cadastrar visitantes, visualizar os dados e salvar observações internas. Os dados da pessoa vinculada ao visitante também ficam protegidos contra alterações diretas; cadastrar uma decisão com o mesmo telefone preserva o nome do visitante para `team`.
 
 Para ativar no banco remoto, aplique as migrations com `npm run db:push` e publique o frontend atualizado. Para verificar as permissões localmente, execute `node scripts/verify-visitor-permissions.mjs`.

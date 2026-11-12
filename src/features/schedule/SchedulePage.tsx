@@ -171,7 +171,7 @@ export function SchedulePage() {
       supabase.from('ministry_schedules').select('id,service_date,service_label,published_at,special_observation').order('service_date', { ascending: true }),
       supabase.from('ministry_schedule_assignments').select('id,schedule_id,volunteer_profile_id,ministry_role'),
       supabase.from('profiles').select('id,display_name').eq('active', true).order('display_name'),
-      supabase.from('ministry_schedule_attendance').select('schedule_id,volunteer_profile_id,was_absent'),
+      isAdmin ? supabase.from('ministry_schedule_attendance').select('schedule_id,volunteer_profile_id,was_absent') : Promise.resolve({ data: [], error: null }),
       supabase.from('visitor_service_gift_reports').select('service_date,service_label,gifts_delivered'),
     ])
     if (scheduleResult.error || assignmentResult.error || profileResult.error || attendanceResult.error || visitorReportResult.error) {
@@ -191,7 +191,7 @@ export function SchedulePage() {
       })))
     }
     setLoading(false)
-  }, [])
+  }, [isAdmin])
   useEffect(() => { void load() }, [load, session?.user.id])
   useEffect(() => {
     if (!requestedScheduleId || loading || !schedules.some(schedule => schedule.id === requestedScheduleId)) return
@@ -368,7 +368,7 @@ export function SchedulePage() {
       {weeklySuggestion && <div className="space-y-3 p-4 sm:p-5"><p className="inline-flex rounded-full border border-[#D9CCB2] bg-[#F7F2E8] px-3 py-1.5 text-xs font-semibold text-[#6B4F1D]">Sugestão de {describeWeek(weeklySuggestion.week)} · não publicada</p><div className="grid gap-3 lg:grid-cols-3">{weeklySuggestion.teams.map(({ schedule, volunteers: suggestedVolunteers }) => <article key={schedule.id} className="rounded-xl border border-[#E5DDCF] bg-[#FFFEFC] p-4"><p className="text-xs font-semibold uppercase tracking-wide text-[#8A6729]">{schedule.service_label}</p><p className="mt-1 text-sm font-medium capitalize">{formatDate(schedule.service_date)}</p><div className="mt-3 flex flex-wrap gap-2">{suggestedVolunteers.map(person => <span key={person.id} className="inline-flex rounded-full border border-[#D9CCB2] bg-white px-2.5 py-1 text-xs font-medium text-[#34322E]">{person.display_name}</span>)}</div><p className="mt-3 text-xs text-[#68645C]">6 pessoas sugeridas, incluindo liderança. Casais permanecem juntos.</p></article>)}</div></div>}
       {!weeklySuggestion && !availableSuggestionWeeks.length && <p className="px-4 py-5 text-sm text-[#68645C]">Crie as escalas da semana para habilitar a sugestão.</p>}
     </section>}
-    {scheduleTab === 'history' && !loading && <ScheduleHistoryTable schedules={historicalSchedules} expandedScheduleIds={expandedScheduleIds} onToggleSchedule={toggleScheduleExpanded}/>}
+    {scheduleTab === 'history' && !loading && <ScheduleHistoryTable canViewAttendance={isAdmin} schedules={historicalSchedules} expandedScheduleIds={expandedScheduleIds} onToggleSchedule={toggleScheduleExpanded}/>}
     {loading && <p role="status" className="text-sm text-[#68645C]">Carregando escalas…</p>}
     {scheduleTab === 'open' && !loading && !error && displayedSchedules.length === 0 && <section className="rounded-2xl border border-dashed border-[#D9CCB2] bg-white p-8 text-center"><CalendarDays size={24} className="mx-auto text-[#8A6729]"/><h2 className="mt-3 font-semibold">{scheduleTab === 'open' ? 'Nenhuma escala aberta' : 'Nenhuma escala no histórico'}</h2><p className="mt-1 text-sm text-[#68645C]">{scheduleTab === 'open' ? isAdmin ? 'Crie uma escala para um culto de hoje ou futuro.' : 'O administrador ainda não cadastrou escalas atuais.' : 'As escalas de cultos anteriores aparecerão aqui.'}</p></section>}
     {scheduleTab === 'open' && <div className="space-y-3">{displayedSchedules.map(schedule => {
@@ -437,7 +437,7 @@ export function SchedulePage() {
               })}
             </section>
           })}</div>
-          <section aria-label={`Presença e faltas de ${schedule.service_label}`} className="border-t border-[#E5DDCF] bg-[#FBF9F4]">
+          {isAdmin && <section aria-label={`Presença e faltas de ${schedule.service_label}`} className="border-t border-[#E5DDCF] bg-[#FBF9F4]">
             <h3 className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#8A6729] sm:px-5">Presenças e faltas</h3>
             <div className="hidden grid-cols-[minmax(130px,.8fr)_minmax(180px,1.2fr)_minmax(220px,auto)] gap-3 border-y border-[#EEE8DC] bg-white px-5 py-2 text-xs font-semibold text-[#68645C] sm:grid"><span>Voluntário</span><span>Função</span><span>Presença</span></div>
             <div className="divide-y divide-[#EEE8DC]">{assignedVolunteers.map(([volunteerId, volunteerName]) => {
@@ -453,7 +453,7 @@ export function SchedulePage() {
                 <div><span className="text-[11px] font-medium text-[#68645C] sm:hidden">Presença</span><div className="mt-1 flex flex-wrap items-center gap-2 sm:mt-0"><span className={wasAbsent ? 'status-negative rounded-full border px-2.5 py-1 text-xs font-medium' : 'status-positive rounded-full border px-2.5 py-1 text-xs font-medium'}>{wasAbsent ? 'Falta' : 'Presente'}</span>{isAdmin && <button type="button" disabled={savingAttendanceKey === attendanceKey} aria-pressed={wasAbsent} onClick={() => void toggleVolunteerAbsence(schedule, volunteerId, wasAbsent)} className={`min-h-9 rounded-lg border px-3 text-xs font-semibold disabled:opacity-60 ${wasAbsent ? 'border-[#D7D9D3] bg-white text-[#565C52]' : 'border-[#E8C8C4] bg-[#FFF1EF] text-[#9B3B32]'}`}>{savingAttendanceKey === attendanceKey ? 'Salvando...' : wasAbsent ? 'Desfazer falta' : 'Marcar falta'}</button>}</div></div>
               </div>
             })}{assignedVolunteers.length === 0 && <p className="px-4 pb-4 text-sm text-[#68645C] sm:px-5">Adicione voluntários à escala para controlar as presenças.</p>}</div>
-          </section>
+          </section>}
         </>}
       </section>
     })}</div>}

@@ -16,6 +16,7 @@ export type HistorySchedule = {
 }
 
 type Props = {
+  canViewAttendance?: boolean
   schedules: HistorySchedule[]
   expandedScheduleIds: string[]
   onToggleSchedule: (scheduleId: string) => void
@@ -33,7 +34,10 @@ function monthLabel(month: string) {
   return new Date(`${month}-15T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
 }
 
-export function ScheduleHistoryTable({ schedules, expandedScheduleIds, onToggleSchedule }: Props) {
+export function ScheduleHistoryTable({ canViewAttendance = false, schedules, expandedScheduleIds, onToggleSchedule }: Props) {
+  const columns = canViewAttendance
+    ? 'grid-cols-[95px_minmax(180px,1.4fr)_minmax(120px,1fr)_120px_75px_115px_110px]'
+    : 'grid-cols-[95px_minmax(180px,1.4fr)_minmax(120px,1fr)_120px_115px_110px]'
   const months = useMemo(() => [...new Set(schedules.map(schedule => schedule.service_date.slice(0, 7)))].sort().reverse(), [schedules])
   const [month, setMonth] = useState('')
   const [serviceFilter, setServiceFilter] = useState('all')
@@ -100,7 +104,7 @@ export function ScheduleHistoryTable({ schedules, expandedScheduleIds, onToggleS
     </div>
 
     <div className="overflow-x-auto px-4 sm:px-5"><div className="min-w-[760px]">
-      <div className="grid grid-cols-[95px_minmax(180px,1.4fr)_minmax(120px,1fr)_120px_75px_115px_110px] gap-3 border-y border-[#EEE8DC] py-3 text-[11px] font-medium uppercase tracking-wide text-[#81796D]"><span>Data</span><span>Culto &amp; horário</span><span>Líder &amp; apoio</span><span>Equipe / total</span><span>Faltas</span><span>Visitantes</span><span className="text-right">Ações</span></div>
+      <div className={`grid ${columns} gap-3 border-y border-[#EEE8DC] py-3 text-[11px] font-medium uppercase tracking-wide text-[#81796D]`}><span>Data</span><span>Culto &amp; horário</span><span>Líder &amp; apoio</span><span>Equipe / total</span>{canViewAttendance && <span>Faltas</span>}<span>Visitantes</span><span className="text-right">Ações</span></div>
       {pageSchedules.map(schedule => {
         const volunteerCount = new Set(schedule.assignments.map(item => item.volunteer_profile_id)).size
         const absenceCount = schedule.attendance.filter(item => item.was_absent).length
@@ -109,12 +113,12 @@ export function ScheduleHistoryTable({ schedules, expandedScheduleIds, onToggleS
         const expanded = expandedScheduleIds.includes(schedule.id)
         const assignedRoleKeys = [...new Set(schedule.assignments.map(item => item.ministry_role))]
         return <div key={schedule.id} className="border-b border-[#F1EEE8]">
-          <div className="grid min-h-[66px] grid-cols-[95px_minmax(180px,1.4fr)_minmax(120px,1fr)_120px_75px_115px_110px] items-center gap-3 py-2.5 text-sm text-[#34322E]">
+          <div className={`grid min-h-[66px] ${columns} items-center gap-3 py-2.5 text-sm text-[#34322E]`}>
             <span className="font-medium">{new Date(`${schedule.service_date}T12:00:00`).toLocaleDateString('pt-BR')}</span>
             <span><span className="block font-medium">{schedule.service_label}</span>{schedule.special_observation && <span className="mt-0.5 block text-xs text-[#81796D]">Com observação</span>}</span>
             <span><span className="block">{leader ?? '—'}</span>{support && <span className="mt-0.5 block text-xs text-[#81796D]">Apoio: {support}</span>}</span>
             <span><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${schedule.published_at ? 'bg-emerald-50 text-emerald-800' : 'bg-[#FBF9F4] text-[#68645C]'}`}><UsersRound size={12}/>{volunteerCount} voluntários</span></span>
-            <span className={absenceCount ? 'font-semibold text-[#A2483E]' : 'text-[#81796D]'}>{absenceCount}</span>
+            {canViewAttendance && <span className={absenceCount ? 'font-semibold text-[#A2483E]' : 'text-[#81796D]'}>{absenceCount}</span>}
             <span className={schedule.visitorsReported === null ? 'text-sm text-[#81796D]' : 'text-sm font-medium text-[#6B4F1D]'}>{schedule.visitorsReported === null ? 'Em andamento' : `${schedule.visitorsReported} pessoas`}</span>
             <span className="text-right"><button type="button" aria-expanded={expanded} onClick={() => onToggleSchedule(schedule.id)} className="whitespace-nowrap text-sm font-medium text-[#7B571F] hover:underline">{expanded ? 'Fechar' : 'Ver escala'} <span aria-hidden="true">→</span></button></span>
           </div>
