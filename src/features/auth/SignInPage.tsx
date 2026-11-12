@@ -27,10 +27,13 @@ export function SignInPage() {
     setSubmitting(false)
   }
 
-  return <main className="min-h-screen bg-[#FBF9F4] md:grid md:grid-cols-[1fr_1fr]">
+  return <main className="flex min-h-screen flex-col bg-[#FBF9F4] md:grid md:grid-cols-[1fr_1fr]">
+    <header className="visitor-hero flex items-center gap-3 bg-[#8A6729] px-5 py-6 text-white sm:px-10 md:hidden">
+      <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-white/10 font-serif text-xl">B</div>
+      <p className="text-sm font-semibold">Ministério de Boas-Vindas</p>
+    </header>
     <section className="relative hidden overflow-hidden bg-[#8A6729] px-12 py-14 text-white md:flex md:flex-col md:justify-between lg:px-20"><div className="absolute -right-28 -top-28 size-[440px] rounded-full border border-white/10"/><div className="absolute -right-4 -top-4 size-[300px] rounded-full border border-white/10"/><div className="absolute -bottom-36 -left-24 size-[420px] rounded-full bg-[#D8C79D]/[.08]"/><div className="relative flex items-center gap-3"><div className="grid size-11 place-items-center rounded-2xl bg-white/10 font-serif text-xl">B</div><span className="font-semibold">Ministério de Boas-Vindas</span></div><div className="relative max-w-lg"><div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/20 px-3 py-1.5 text-xs text-white/75"><span className="size-1.5 rounded-full bg-[#D8C79D]"/> Acolhimento e comunidade</div><h1 className="font-serif text-5xl leading-[1.12] tracking-tight lg:text-6xl">Todo encontro<br/>pode ser um<br/><em className="font-normal text-[#D8C79D]">começo.</em></h1><p className="mt-6 max-w-sm text-sm leading-7 text-white/65">Um espaço para acolher, acompanhar e caminhar junto com cada pessoa.</p></div><p className="relative text-xs text-white/45">Comunidade, cuidado e pertencimento.</p></section>
-    <section className="flex min-h-screen items-center justify-center px-5 py-12 sm:px-10"><div className="w-full max-w-[390px]">
-      <div className="mb-10 md:hidden"><div className="brand-mark mb-4">B</div><p className="text-sm font-medium">Ministério de Boas-Vindas</p></div>
+    <section className="flex flex-1 items-center justify-center px-5 py-10 sm:px-10 md:min-h-screen md:py-12"><div className="w-full max-w-[390px]">
       <div className="mb-8"><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Área da equipe</p><h2 className="mt-3 text-3xl font-semibold tracking-tight">Bem-vindo de volta</h2><p className="mt-2 text-sm text-muted">Entre com sua conta autorizada para continuar.</p></div>
       <form onSubmit={handleSubmit} className="space-y-5">
         <label className="block text-sm font-medium">E-mail<input className="form-input mt-2" type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} placeholder="voce@igreja.com.br" /></label>
