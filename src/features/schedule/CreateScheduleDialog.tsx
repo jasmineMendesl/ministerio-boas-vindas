@@ -5,6 +5,7 @@ import { scheduledOnThursdayThisWeek, servedSameServiceLastWeek } from './assign
 import type { HistorySchedule } from './ScheduleHistoryTable'
 
 export type NewScheduleAssignment = { volunteer_profile_id: string; ministry_role: string }
+const primaryRoles = [['portaria', 'Portaria'], ['seat_direction', 'Direcionamento de assentos']] as const
 const extraRoles = [
   ['leader', 'Líder'], ['support', 'Apoio'], ['media', 'Mídia'], ['opening_prayer', 'Oração inicial'],
   ['male_welcoming', 'Acolhimento masculino'], ['female_welcoming', 'Acolhimento feminino'],
@@ -22,12 +23,14 @@ type Props = {
 }
 
 export function CreateScheduleDialog({ date, service, volunteers, schedules, saving, error, onCancel, onSave }: Props) {
-  const [selected, setSelected] = useState<Record<string, { primary: string; extra: string[] }>>({})
+  const [assignments, setAssignments] = useState<NewScheduleAssignment[]>([])
   const [validationError, setValidationError] = useState('')
   const dialogRef = useRef<HTMLElement>(null)
   const target = { id: 'new-schedule', service_date: date, service_label: service, assignments: [] }
-  const selectedCount = Object.keys(selected).length
-  const portariaCount = Object.values(selected).filter(item => item.primary === 'portaria').length
+  const primaryIds = new Set(assignments.filter(item => item.ministry_role === 'portaria' || item.ministry_role === 'seat_direction').map(item => item.volunteer_profile_id))
+  const selectedCount = primaryIds.size
+  const portariaCount = assignments.filter(item => item.ministry_role === 'portaria').length
+  const repeatedVolunteers = volunteers.filter(person => primaryIds.has(person.id) && servedSameServiceLastWeek(schedules, target, person.id))
 
   useEffect(() => {
     const previousFocus = document.activeElement as HTMLElement | null
@@ -42,9 +45,7 @@ export function CreateScheduleDialog({ date, service, volunteers, schedules, sav
     if (saving) return
     setValidationError('')
     if (!selectedCount) { setValidationError('Selecione pelo menos um voluntário.'); return }
-    if (Object.values(selected).some(item => !item.primary)) { setValidationError('Escolha a função principal de cada voluntário selecionado.'); return }
     if (portariaCount > 4) { setValidationError('Portaria permite no máximo quatro voluntários por culto.'); return }
-    const assignments = Object.entries(selected).flatMap(([id, item]) => [item.primary, ...item.extra].map(ministry_role => ({ volunteer_profile_id: id, ministry_role })))
     onSave(assignments)
   }
 
@@ -59,28 +60,42 @@ export function CreateScheduleDialog({ date, service, volunteers, schedules, sav
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
     }}>
       <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border p-4 sm:p-5">
-        <div><h2 id="create-schedule-title" className="text-lg font-semibold">Selecionar voluntários</h2><p className="mt-1 text-sm text-muted">{service} · {new Date(`${date}T12:00:00`).toLocaleDateString('pt-BR')}</p><p className="mt-2 text-xs leading-5 text-muted">Selecione a equipe e distribua as funções. A escala será criada ao salvar.</p></div>
+        <div><h2 id="create-schedule-title" className="text-lg font-semibold">Distribuir funções</h2><p className="mt-1 text-sm text-muted">{service} · {new Date(`${date}T12:00:00`).toLocaleDateString('pt-BR')}</p><p className="mt-2 text-xs leading-5 text-muted">Escolha os voluntários de cada função. A escala será criada ao salvar.</p></div>
         <button type="button" aria-label="Fechar seleção de voluntários" disabled={saving} onClick={onCancel} className="grid size-11 shrink-0 place-items-center rounded-lg hover:bg-[#F7F2E8] disabled:opacity-50"><X size={18}/></button>
       </header>
       <form onSubmit={save} className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-5">
           <p className="text-xs font-medium text-muted">{selectedCount} selecionado(s) · Portaria: {portariaCount}/4</p>
-          {volunteers.map(person => {
-            const item = selected[person.id]
-            const thursday = scheduledOnThursdayThisWeek(schedules, target, person.id)
-            const repeated = Boolean(item) && servedSameServiceLastWeek(schedules, target, person.id)
-            return <article key={person.id} className={`min-w-0 rounded-xl border p-3 sm:p-4 ${item ? 'border-[#C2A35E] bg-[#FBF9F4]' : 'border-border'}`}>
-              <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-semibold"><input type="checkbox" className="size-5 shrink-0 accent-[#8A6729]" disabled={saving} checked={Boolean(item)} onChange={event => {
-                setValidationError('')
-                setSelected(current => { const next = { ...current }; if (event.target.checked) next[person.id] = { primary: '', extra: [] }; else delete next[person.id]; return next })
-              }}/><span className={thursday ? 'text-gray-500' : ''}>{person.display_name}{thursday && <span className="block text-xs font-normal">Já escalado na quinta desta semana</span>}</span></label>
-              {repeated && <p role="status" className="status-pending mt-2 flex items-start gap-2 rounded-lg border px-3 py-2 text-xs leading-5"><Info size={14} className="mt-0.5 shrink-0"/>essa pessoa serviu nesse culto na semana passada</p>}
-              {item && <div className="mt-3 space-y-3 border-t border-border pt-3">
-                <label className="block text-xs font-medium">Função principal de {person.display_name}<select className="form-input mt-1.5" value={item.primary} disabled={saving} onChange={event => setSelected(current => ({ ...current, [person.id]: { ...current[person.id], primary: event.target.value } }))}><option value="">Selecione a função</option><option value="portaria">Portaria</option><option value="seat_direction">Direcionamento de assentos</option></select></label>
-                <fieldset disabled={saving}><legend className="mb-2 text-xs font-medium">Responsabilidades complementares de {person.display_name}</legend><div className="grid gap-2 sm:grid-cols-2">{extraRoles.map(([key, label]) => <label key={key} className="flex min-h-10 items-center gap-2 text-xs"><input type="checkbox" className="size-4 shrink-0 accent-[#8A6729]" checked={item.extra.includes(key)} onChange={event => setSelected(current => ({ ...current, [person.id]: { ...current[person.id], extra: event.target.checked ? [...current[person.id].extra, key] : current[person.id].extra.filter(role => role !== key) } }))}/>{label}</label>)}</div></fieldset>
-              </div>}
-            </article>
-          })}
+          {repeatedVolunteers.map(person => <p key={person.id} role="status" className="status-pending flex items-start gap-2 rounded-lg border px-3 py-2 text-xs leading-5"><Info size={14} className="mt-0.5 shrink-0"/><span><strong>{person.display_name}:</strong> essa pessoa serviu nesse culto na semana passada</span></p>)}
+          {[
+            { title: 'Funções principais', roles: primaryRoles, primary: true },
+            { title: 'Responsabilidades complementares', roles: extraRoles, primary: false },
+          ].map(group => <section key={group.title} aria-label={group.title} className="overflow-hidden rounded-xl border border-border">
+            <h3 className="bg-[#F7F2E8] px-4 py-3 text-xs font-semibold uppercase tracking-wide text-primary">{group.title}</h3>
+            {!group.primary && <p className="px-4 pt-3 text-xs leading-5 text-muted">Escolha primeiro os voluntários das funções principais. Ao removê-los da função principal, suas responsabilidades complementares também serão removidas.</p>}
+            <div className="divide-y divide-border">{group.roles.map(([key, label]) => {
+              const assigned = assignments.filter(item => item.ministry_role === key)
+              const eligible = volunteers.filter(person => (group.primary ? !primaryIds.has(person.id) : primaryIds.has(person.id)) && !assigned.some(item => item.volunteer_profile_id === person.id))
+              const full = key === 'portaria' && portariaCount >= 4
+              return <div key={key} className="grid min-w-0 gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+                <label className="min-w-0 text-sm font-medium">{label}{key === 'portaria' && <span className="ml-2 text-xs text-muted">{portariaCount}/4</span>}
+                  <select aria-label={`Selecionar voluntário para ${label}`} value="" disabled={saving || full || !eligible.length} className="form-input mt-2" onChange={event => {
+                    const id = event.target.value
+                    if (!id) return
+                    setValidationError('')
+                    setAssignments(current => [...current, { volunteer_profile_id: id, ministry_role: key }])
+                  }}><option value="">{full ? 'Limite de quatro voluntários' : !group.primary && !primaryIds.size ? 'Escolha uma função principal primeiro' : 'Adicionar voluntário'}</option>{eligible.map(person => {
+                    const thursday = scheduledOnThursdayThisWeek(schedules, target, person.id)
+                    return <option key={person.id} value={person.id} className={thursday ? 'text-gray-400' : undefined} style={thursday ? { color: '#9ca3af' } : undefined}>{person.display_name}{thursday ? ' — já escalado na quinta' : ''}</option>
+                  })}</select>
+                </label>
+                <div className="flex min-w-0 flex-wrap content-start items-start gap-2 sm:pt-7">{assigned.map(item => {
+                  const name = volunteers.find(person => person.id === item.volunteer_profile_id)?.display_name ?? 'Voluntário'
+                  return <span key={item.volunteer_profile_id} className="inline-flex max-w-full items-center gap-2 rounded-xl bg-[#F0E6D2] px-3 py-1 text-sm"><span className="break-words">{name}</span><button type="button" disabled={saving} aria-label={`Remover ${name} de ${label}`} className="grid size-8 shrink-0 place-items-center rounded-lg text-[#8B3C32] hover:bg-white disabled:opacity-50" onClick={() => setAssignments(current => current.filter(assignment => group.primary ? assignment.volunteer_profile_id !== item.volunteer_profile_id : !(assignment.volunteer_profile_id === item.volunteer_profile_id && assignment.ministry_role === key)))}><X size={14}/></button></span>
+                })}{!assigned.length && <span className="text-xs text-muted">Nenhum voluntário selecionado</span>}</div>
+              </div>
+            })}</div>
+          </section>)}
           {!volunteers.length && <p className="py-6 text-center text-sm text-muted">Nenhum voluntário ativo disponível.</p>}
         </div>
         <footer className="shrink-0 border-t border-border bg-white p-4 sm:p-5">
