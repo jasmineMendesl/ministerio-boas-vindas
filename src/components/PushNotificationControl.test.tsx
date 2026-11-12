@@ -1,14 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 
-const mocks = vi.hoisted(() => ({ upsert: vi.fn(), register: vi.fn(), getSubscription: vi.fn(), subscribe: vi.fn(), requestPermission: vi.fn() }))
+const mocks = vi.hoisted(() => ({ upsert: vi.fn(), remove: vi.fn(), register: vi.fn(), getSubscription: vi.fn(), subscribe: vi.fn(), requestPermission: vi.fn() }))
 vi.mock('../app/AuthProvider', () => ({ useAuth: () => ({ session: { user: { id: 'user-1' } } }) }))
-vi.mock('../lib/supabase', () => ({ supabase: { from: () => ({ upsert: mocks.upsert }) } }))
+vi.mock('../lib/supabase', () => {
+  const query = {
+    eq: () => query,
+    then: (resolve: (value: unknown) => unknown, reject?: (error: unknown) => unknown) => Promise.resolve(mocks.remove()).then(resolve, reject),
+  }
+  return { supabase: { from: () => ({ upsert: mocks.upsert, delete: () => query }) } }
+})
 import { PushNotificationControl, removePushSubscription } from './PushNotificationControl'
 
 describe('mobile notifications', () => {
   beforeEach(() => {
     mocks.upsert.mockResolvedValue({ error: null })
+    mocks.remove.mockResolvedValue({ error: null })
     mocks.getSubscription.mockResolvedValue(null)
     mocks.requestPermission.mockResolvedValue('granted')
     mocks.subscribe.mockResolvedValue({ endpoint: 'https://push.example/subscription', toJSON: () => ({ keys: { p256dh: 'key', auth: 'auth' } }) })
@@ -50,6 +57,29 @@ describe('mobile notifications', () => {
     render(<PushNotificationControl />)
     await act(() => vi.advanceTimersByTimeAsync(10000))
     expect(screen.getByRole('button', { name: 'Tentar novamente' }).hasAttribute('disabled')).toBe(false)
+  })
+
+  it('offers reactivation after disabling and saves a new subscription without asking permission again', async () => {
+    const makeSubscription = (endpoint: string) => ({
+      endpoint,
+      toJSON: () => ({ keys: { p256dh: 'key', auth: 'auth' } }),
+      unsubscribe: vi.fn(async () => { subscription = null; return true }),
+    })
+    let subscription: ReturnType<typeof makeSubscription> | null = makeSubscription('https://push.example/old')
+    mocks.getSubscription.mockImplementation(async () => subscription)
+    mocks.subscribe.mockImplementation(async () => { subscription = makeSubscription('https://push.example/new'); return subscription })
+    vi.stubGlobal('Notification', { permission: 'granted', requestPermission: mocks.requestPermission })
+    render(<PushNotificationControl />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Desativar notificações' }))
+    await screen.findByText('Notificações desativadas neste dispositivo.')
+    expect(screen.getByRole('button', { name: 'Ativar notificações neste dispositivo' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Ativar novamente' }))
+    await screen.findByText('Notificações ativadas neste dispositivo.')
+    expect(screen.getByRole('button', { name: 'Desativar notificações' })).toBeTruthy()
+    expect(mocks.remove).toHaveBeenCalledOnce()
+    expect(mocks.subscribe).toHaveBeenCalledOnce()
+    expect(mocks.requestPermission).not.toHaveBeenCalled()
+    expect(mocks.upsert).toHaveBeenLastCalledWith(expect.objectContaining({ endpoint: 'https://push.example/new' }), { onConflict: 'endpoint' })
   })
 
   it('does not fail logout when service workers exist without push support', async () => {

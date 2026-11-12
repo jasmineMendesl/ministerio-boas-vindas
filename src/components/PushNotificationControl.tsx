@@ -94,7 +94,7 @@ export function PushNotificationControl() {
         }
         setState('off'); setMessage('Notificações desativadas neste dispositivo.')
       } else {
-        const permission = await Notification.requestPermission()
+        const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission()
         if (permission !== 'granted') {
           setState(permission === 'denied' ? 'denied' : 'off')
           setMessage(permission === 'denied' ? 'Permissão bloqueada. Libere as notificações nas configurações deste site ou do celular.' : 'Permissão não concedida. Toque no sino para tentar novamente e permitir os avisos.')
@@ -124,8 +124,8 @@ export function PushNotificationControl() {
 
   return <div className="relative shrink-0" title={label}>
     <button type="button" aria-label={busy ? 'Atualizando notificações' : label} aria-expanded={Boolean(message || state === 'error')} disabled={disabled} onClick={() => void toggle()} className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-lg border border-[#E5DDCF] bg-white px-3 text-xs font-medium text-[#34322E] hover:bg-[#F7F2E8] disabled:cursor-not-allowed disabled:opacity-60">
-      {state === 'on' ? <Bell size={16}/> : <BellOff size={16}/>}<span className="hidden lg:inline">{state === 'on' ? 'Avisos ativos' : state === 'not-configured' ? 'Avisos indisponíveis' : state === 'unsupported' ? 'Não suportado' : state === 'denied' ? 'Permissão bloqueada' : 'Ativar avisos'}</span>
+      {state === 'on' ? <Bell size={16}/> : <BellOff size={16}/>}{state === 'off' && <span className="lg:hidden">Ativar</span>}<span className="hidden lg:inline">{state === 'on' ? 'Avisos ativos' : state === 'not-configured' ? 'Avisos indisponíveis' : state === 'unsupported' ? 'Não suportado' : state === 'denied' ? 'Permissão bloqueada' : 'Ativar avisos'}</span>
     </button>
-    {(message || state === 'error') && <div role="status" className="absolute right-0 top-full z-50 mt-2 flex w-64 max-w-[calc(100vw-5rem)] items-start gap-2 rounded-lg border border-[#E5DDCF] bg-white p-3 text-xs leading-5 text-[#34322E] shadow-lg"><span className="min-w-0 flex-1">{message || 'Não foi possível verificar os avisos. Toque no sino para tentar novamente.'}</span><button type="button" aria-label="Fechar aviso de notificações" className="grid size-7 shrink-0 place-items-center rounded-md hover:bg-[#F7F2E8]" onClick={() => { setMessage(''); if (state === 'error') setState('off') }}><X size={14}/></button></div>}
+    {(message || state === 'error') && <div role="status" className="absolute right-0 top-full z-50 mt-2 flex w-64 max-w-[calc(100vw-5rem)] items-start gap-2 rounded-lg border border-[#E5DDCF] bg-white p-3 text-xs leading-5 text-[#34322E] shadow-lg"><div className="min-w-0 flex-1"><p>{message || 'Não foi possível verificar os avisos. Toque no sino para tentar novamente.'}</p>{state === 'off' && <button type="button" disabled={busy} onClick={() => void toggle()} className="mt-3 min-h-11 w-full rounded-lg bg-primary px-3 font-semibold text-white disabled:opacity-60">Ativar novamente</button>}</div><button type="button" aria-label="Fechar aviso de notificações" className="grid size-7 shrink-0 place-items-center rounded-md hover:bg-[#F7F2E8]" onClick={() => { setMessage(''); if (state === 'error') setState('off') }}><X size={14}/></button></div>}
   </div>
 }
