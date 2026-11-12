@@ -8,6 +8,7 @@ import { PageTabs } from '../../components/PageTabs'
 import { ScheduleHistoryTable } from './ScheduleHistoryTable'
 import { ExtraSchedulesPanel } from './ExtraSchedulesPanel'
 import { DeleteScheduleDialog } from './DeleteScheduleDialog'
+import { CreateScheduleDialog, type NewScheduleAssignment } from './CreateScheduleDialog'
 import { scheduledOnThursdayThisWeek, servedSameServiceLastWeek } from './assignment-warnings'
 const primaryRoles = [
   ['portaria', 'Portaria'],
@@ -152,6 +153,8 @@ export function SchedulePage() {
   const [newService, setNewService] = useState<ServiceLabel>('Domingo às 10h')
   const [newObservation, setNewObservation] = useState('')
   const [showObservationField, setShowObservationField] = useState(false)
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [createError, setCreateError] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -226,14 +229,35 @@ export function SchedulePage() {
       ],
     }))
   }
-  async function createSchedule(event: FormEvent<HTMLFormElement>) {
+  function createSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(''); setNotice('')
-    if (!supabase || !session?.user.id || !isAdmin) return
-    setSaving(true)
-    const { error: saveError } = await supabase.from('ministry_schedules').insert({ service_date: newDate, service_label: newService, special_observation: newObservation.trim() || null, created_by: session.user.id, updated_by: session.user.id })
-    setSaving(false)
-    if (saveError) { setError(saveError.code === '23505' ? 'Já existe uma escala para essa data.' : 'Não foi possível criar a escala.'); return }
-    setNewDate(''); setNewObservation(''); setShowObservationField(false); setNotice('Escala criada. Abra “Editar escala” para distribuir as funções e os voluntários.'); await load()
+    if (!supabase || !session?.user.id || !isAdmin || loading || saving || !newDate) return
+    setCreateError(''); setShowCreateDialog(true)
+  }
+  async function saveCreatedSchedule(assignments: NewScheduleAssignment[]) {
+    if (!supabase || !session?.user.id || !isAdmin || saving) return
+    setSaving(true); setCreateError('')
+    try {
+      const { data, error: saveError } = await supabase.rpc('create_ministry_schedule_with_assignments', {
+        p_service_date: newDate,
+        p_service_label: newService,
+        p_special_observation: newObservation.trim() || null,
+        p_assignments: assignments,
+      })
+      if (saveError || !data) {
+        setCreateError(saveError?.code === '23505' ? 'Já existe uma escala para essa data e culto, ou uma atribuição duplicada.' : 'Não foi possível salvar a escala. Confira a conexão e tente novamente.')
+        return
+      }
+      const historical = newDate < todayKey
+      setShowCreateDialog(false)
+      setNewDate(''); setNewObservation(''); setShowObservationField(false)
+      setNotice('Escala criada com os voluntários selecionados. Publique para avisar a equipe.')
+      setSearchParams(historical ? { tab: 'history' } : {})
+      setExpandedScheduleIds(current => [...current, data as string])
+      await load()
+    } catch {
+      setCreateError('Não foi possível salvar a escala. Confira a conexão e tente novamente.')
+    } finally { setSaving(false) }
   }
   async function addAssignment(schedule: Schedule, ministryRole: string, personId: string) {
     setError(''); setNotice('')
@@ -467,6 +491,7 @@ export function SchedulePage() {
       </section>
     })}</div>}
     </>}
+    {isAdmin && showCreateDialog && <CreateScheduleDialog date={newDate} service={newService} volunteers={volunteers} schedules={schedules} saving={saving} error={createError} onCancel={() => { if (!saving) setShowCreateDialog(false) }} onSave={assignments => void saveCreatedSchedule(assignments)}/>}
     {scheduleToDelete && <DeleteScheduleDialog description={`Excluir a escala ${scheduleToDelete.service_label} de ${formatDate(scheduleToDelete.service_date)} e todas as atribuições?`} deleting={deleting} error={deleteError} onCancel={() => setScheduleToDelete(null)} onConfirm={() => void deleteSchedule(scheduleToDelete)}/>}
   </div>
 }
