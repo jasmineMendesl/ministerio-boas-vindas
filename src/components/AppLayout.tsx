@@ -1,9 +1,11 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import { BarChart3, CalendarDays, Coffee, HeartHandshake, LayoutDashboard, LogOut, Sparkles, UserPlus, UsersRound } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../app/AuthProvider'
 import { Button } from './ui/button'
 import { PushNotificationControl, removePushSubscription } from './PushNotificationControl'
+import { withTimeout } from '../lib/with-timeout'
 
 const links = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -17,13 +19,26 @@ const links = [
 export function AppLayout() {
   const { session, role, displayName } = useAuth()
   const navigate = useNavigate()
+  const [signingOut, setSigningOut] = useState(false)
+  const [signOutError, setSignOutError] = useState('')
   const email = session?.user.email ?? 'Equipe autorizada'
   const visibleLinks = links.filter(link => !link.adminOnly || role === 'admin')
 
   async function signOut() {
-    await removePushSubscription(session?.user.id)
-    await supabase?.auth.signOut()
-    navigate('/login', { replace: true })
+    if (signingOut || !supabase) return
+    setSigningOut(true)
+    setSignOutError('')
+    try {
+      // A missing push API or a stalled connection must not prevent logout.
+      await withTimeout(removePushSubscription(session?.user.id), 2000).catch(() => undefined)
+      const { error } = await withTimeout(supabase.auth.signOut({ scope: 'local' }))
+      if (error) throw error
+      navigate('/login', { replace: true })
+    } catch {
+      setSignOutError('Não foi possível sair. Confira a conexão e tente novamente.')
+    } finally {
+      setSigningOut(false)
+    }
   }
 
   return <div className="min-h-screen bg-background text-foreground">
@@ -33,11 +48,12 @@ export function AppLayout() {
         <div className="mt-6 px-3 text-[11px] font-semibold uppercase tracking-[.16em] text-muted">Menu principal</div>
         <nav aria-label="Menu principal" className="mt-3 flex flex-col gap-1">{visibleLinks.map(({ to, label, icon: Icon, end }) => <NavLink key={to} to={to} end={end} className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}><Icon size={18} strokeWidth={1.8}/><span>{label}</span></NavLink>)}</nav>
         <div className="mt-auto rounded-2xl bg-[#F0E6D2] p-4"><div className="mb-3 grid size-9 place-items-center rounded-xl bg-white text-primary"><Sparkles size={17}/></div><p className="text-sm font-medium">Um lugar para pertencer</p><p className="mt-1 text-xs leading-5 text-muted">Acolhendo pessoas com cuidado, em cada etapa.</p></div>
-        <div className="mt-5 flex items-center justify-between gap-2 border-t border-border pt-4"><div className="min-w-0"><p className="truncate text-xs font-semibold">{displayName ?? 'Equipe autorizada'}</p><p className="truncate text-[11px] text-muted">{email} · {role === 'admin' ? 'Admin' : 'Team'}</p></div><Button variant="ghost" size="icon" aria-label="Sair" onClick={signOut}><LogOut size={17}/></Button></div>
+        <div className="mt-5 flex items-center justify-between gap-2 border-t border-border pt-4"><div className="min-w-0"><p className="truncate text-xs font-semibold">{displayName ?? 'Equipe autorizada'}</p><p className="truncate text-[11px] text-muted">{email} · {role === 'admin' ? 'Admin' : 'Team'}</p></div><Button variant="ghost" size="icon" aria-label={signingOut ? 'Saindo' : 'Sair'} disabled={signingOut} onClick={() => void signOut()}><LogOut size={17}/></Button></div>
     </aside>
     <div className="md:pl-[264px]">
-      <header className="topbar"><div className="flex items-center gap-3 md:hidden"><div className="brand-mark size-9 text-sm">B</div><span className="font-semibold">Ministério de Boas-Vindas</span></div><div className="hidden md:block"><p className="text-xs text-muted">MINISTÉRIO DE BOAS-VINDAS</p><p className="text-sm font-medium">Acolhimento com cuidado e propósito</p></div><div className="ml-auto hidden items-center gap-2 sm:flex"><span className="size-2 rounded-full bg-emerald-500"/><span className="text-xs text-muted">Área da equipe</span></div><PushNotificationControl/><Button className="ml-auto md:hidden" variant="ghost" size="icon" aria-label="Sair" onClick={signOut}><LogOut size={17}/></Button></header>
-      <main className="mx-auto max-w-[1320px] px-4 pb-28 pt-7 sm:px-7 md:px-10 md:pb-12 md:pt-9"><Outlet/></main>
+      <header className="topbar"><div className="flex min-w-0 flex-1 items-center gap-2 md:hidden"><div className="brand-mark size-9 shrink-0 text-sm">B</div><span className="min-w-0 text-xs font-semibold leading-tight sm:text-base">Ministério de<br className="sm:hidden"/> Boas-Vindas</span></div><div className="hidden md:block"><p className="text-xs text-muted">MINISTÉRIO DE BOAS-VINDAS</p><p className="text-sm font-medium">Acolhimento com cuidado e propósito</p></div><div className="ml-auto hidden items-center gap-2 sm:flex"><span className="size-2 rounded-full bg-emerald-500"/><span className="text-xs text-muted">Área da equipe</span></div><div className="ml-auto flex shrink-0 items-center gap-2"><PushNotificationControl/><Button className="min-h-11 min-w-11 shrink-0 md:hidden" variant="ghost" size="icon" aria-label={signingOut ? 'Saindo' : 'Sair'} disabled={signingOut} onClick={() => void signOut()}><LogOut size={17}/></Button></div></header>
+      {signOutError && <p role="alert" className="status-negative mx-4 mt-3 rounded-lg border px-3 py-2 text-sm">{signOutError}</p>}
+      <main className="mx-auto min-w-0 max-w-[1320px] px-4 pb-28 pt-7 sm:px-7 md:px-10 md:pb-12 md:pt-9"><Outlet/></main>
       <nav aria-label="Menu inferior" className="bottom-nav md:hidden" style={{ gridTemplateColumns: `repeat(${visibleLinks.length}, minmax(0, 1fr))` }}>{visibleLinks.map(({ to, short, label, icon: Icon, end }) => <NavLink key={to} to={to} end={end} className={({ isActive }) => `bottom-link ${isActive ? 'bottom-link-active' : ''}`}><Icon size={19} strokeWidth={1.9}/><span>{short ?? label}</span></NavLink>)}</nav>
     </div>
   </div>
