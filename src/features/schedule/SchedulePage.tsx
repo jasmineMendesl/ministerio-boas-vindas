@@ -8,6 +8,7 @@ import { PageTabs } from '../../components/PageTabs'
 import { ScheduleHistoryTable } from './ScheduleHistoryTable'
 import { ExtraSchedulesPanel } from './ExtraSchedulesPanel'
 import { DeleteScheduleDialog } from './DeleteScheduleDialog'
+import { scheduledOnThursdayThisWeek, servedSameServiceLastWeek } from './assignment-warnings'
 const primaryRoles = [
   ['portaria', 'Portaria'],
   ['seat_direction', 'Direcionamento de assentos'],
@@ -376,6 +377,7 @@ export function SchedulePage() {
       const isEditing = editingScheduleIds.includes(schedule.id)
       const volunteerCount = new Set(schedule.assignments.map(item => item.volunteer_profile_id)).size
       const assignedVolunteers = [...new Map(schedule.assignments.map(item => [item.volunteer_profile_id, item.volunteer?.display_name ?? 'Voluntário'])).entries()]
+      const repeatVolunteers = isAdmin ? assignedVolunteers.filter(([id]) => servedSameServiceLastWeek(schedules, schedule, id)) : []
       return <section key={schedule.id} className="overflow-hidden rounded-2xl border border-[#E5DDCF] bg-white shadow-[0_3px_12px_rgba(0,0,0,.035)]">
         <header className="flex flex-col gap-3 bg-[#FBF9F4] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <button type="button" aria-expanded={isExpanded} onClick={() => toggleScheduleExpanded(schedule.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
@@ -399,6 +401,7 @@ export function SchedulePage() {
           </div>}
         </header>
         {isExpanded && <>
+          {repeatVolunteers.length > 0 && <div aria-label="Avisos de repetição na escala" className="flex flex-wrap gap-2 border-t border-[#EEE8DC] px-4 py-3 sm:px-5">{repeatVolunteers.map(([id, name]) => <span key={id} role="status" className="status-pending inline-flex max-w-full items-start gap-2 rounded-xl border px-3 py-2 text-xs leading-5"><Info size={14} className="mt-0.5 shrink-0"/><span><strong>{name}:</strong> essa pessoa serviu nesse culto na semana passada</span></span>)}</div>}
           {schedule.special_observation && <aside aria-label="Observação específica da escala" className="mx-4 my-5 rounded-xl border border-[#F0CDCA] bg-[#FFF3F2] px-4 py-5 sm:mx-5 sm:px-5"><p className="flex items-center gap-2.5 text-sm font-semibold text-[#963F38]"><MessageSquareText size={17} className="shrink-0"/>Observação desta escala</p><p className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-[#713F3A]">{schedule.special_observation}</p></aside>}
           {isEditing && <p className="border-t border-[#EEE8DC] bg-[#FFFDF9] px-4 py-2.5 text-xs leading-5 text-[#68645C] sm:px-5">Modo de edição ativo. Ao terminar, publique a escala ou a atualização para avisar os voluntários.</p>}
           <div className="divide-y divide-[#EEE8DC]">{[
@@ -426,7 +429,10 @@ export function SchedulePage() {
                     <p className="flex items-center gap-2 break-words text-sm font-medium">{label}{key === 'portaria' && <span className="rounded-full bg-[#F0E6D2] px-2 py-0.5 text-xs font-medium text-[#6B4F1D]">{assigned.length}/{portariaVolunteerLimit}</span>}</p>
                     {isAdmin && isEditing && group.assignable && <select aria-label={`Selecionar voluntário para ${label}`} className="form-input h-10 w-full text-sm sm:max-w-56" value="" disabled={saving || volunteers.length === 0 || portariaFull || (group.title === 'Responsabilidades complementares' && !schedule.assignments.some(item => primaryRoleKeys.has(item.ministry_role)))} onChange={event => { if (event.target.value) void addAssignment(schedule, key, event.target.value) }}>
                       <option value="">{portariaFull ? 'Limite de quatro voluntários atingido' : group.title === 'Responsabilidades complementares' && !schedule.assignments.some(item => primaryRoleKeys.has(item.ministry_role)) ? 'Adicione uma função principal primeiro' : 'Adicionar voluntário'}</option>
-                      {selectableVolunteers.map(person => <option key={person.id} value={person.id}>{person.display_name}</option>)}
+                      {selectableVolunteers.map(person => {
+                        const selectedThursday = scheduledOnThursdayThisWeek(schedules, schedule, person.id)
+                        return <option key={person.id} value={person.id} className={selectedThursday ? 'text-gray-400' : undefined} style={selectedThursday ? { color: '#9ca3af' } : undefined}>{person.display_name}{selectedThursday ? ' — já escalado na quinta' : ''}</option>
+                      })}
                     </select>}
                   </div>
                   <div className="flex min-w-0 flex-wrap gap-2">
