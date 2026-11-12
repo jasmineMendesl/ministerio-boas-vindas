@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { CalendarDays, Check, ChevronDown, Info, MessageSquareText, Pencil, Plus, Shuffle, Trash2, UsersRound, X } from 'lucide-react'
+import { CalendarDays, Check, ChevronDown, Info, MessageSquareText, Pencil, Plus, Send, Shuffle, Trash2, UsersRound, X } from 'lucide-react'
 import { useAuth } from '../../app/AuthProvider'
 import { supabase } from '../../lib/supabase'
 import { PageHeader } from '../../components/PageHeader'
@@ -419,18 +419,18 @@ export function SchedulePage() {
             </span>
             <ChevronDown size={18} className={`shrink-0 text-[#8A6729] transition-transform ${isExpanded ? 'rotate-180' : ''}`}/>
           </button>
-          {isAdmin && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
-            <button type="button" aria-pressed={isEditing} onClick={() => toggleScheduleEditing(schedule.id)} className={`inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold sm:flex-none ${isEditing ? 'border-[#CFC0A3] bg-[#F0E6D2] text-[#6B4F1D]' : 'border-[#E5DDCF] bg-white text-[#34322E] hover:bg-[#F7F2E8]'}`}>
-              {isEditing ? <Check size={15}/> : <Pencil size={15}/>}{isEditing ? 'Concluir edição' : 'Editar escala'}
+          {isAdmin && <div className="flex shrink-0 items-center justify-end gap-2">
+            <button type="button" aria-label={isEditing ? 'Concluir edição' : 'Editar escala'} title={isEditing ? 'Concluir edição' : 'Editar escala'} aria-pressed={isEditing} onClick={() => toggleScheduleEditing(schedule.id)} className={`grid size-11 shrink-0 place-items-center rounded-lg border ${isEditing ? 'border-[#CFC0A3] bg-[#F0E6D2] text-[#6B4F1D]' : 'border-[#E5DDCF] bg-white text-[#34322E] hover:bg-[#F7F2E8]'}`}>
+              {isEditing ? <Check size={17}/> : <Pencil size={17}/>}
             </button>
-            {!!schedule.assignments.length && <button type="button" disabled={saving} onClick={() => void publishSchedule(schedule)} className="min-h-10 flex-1 rounded-lg bg-[#8A6729] px-3 py-2 text-xs font-semibold text-white disabled:opacity-60 sm:flex-none">{schedule.published_at ? 'Publicar atualização' : 'Publicar escala'}</button>}
+            {!schedule.published_at && !!schedule.assignments.length && <button type="button" aria-label="Publicar escala" title="Publicar escala" disabled={saving} onClick={() => void publishSchedule(schedule)} className="grid size-11 shrink-0 place-items-center rounded-lg bg-[#8A6729] text-white disabled:opacity-60"><Send size={17}/></button>}
             <button type="button" aria-label={`Excluir escala de ${schedule.service_label} em ${formatDate(schedule.service_date)}`} onClick={() => { setDeleteError(''); setScheduleToDelete(schedule) }} className="grid size-10 shrink-0 place-items-center rounded-lg text-[#8B3C32] hover:bg-red-50"><Trash2 size={16}/></button>
           </div>}
         </header>
         {isExpanded && <>
           {repeatVolunteers.length > 0 && <div aria-label="Avisos de repetição na escala" className="flex flex-wrap gap-2 border-t border-[#EEE8DC] px-4 py-3 sm:px-5">{repeatVolunteers.map(([id, name]) => <span key={id} role="status" className="status-pending inline-flex max-w-full items-start gap-2 rounded-xl border px-3 py-2 text-xs leading-5"><Info size={14} className="mt-0.5 shrink-0"/><span><strong>{name}:</strong> essa pessoa serviu nesse culto na semana passada</span></span>)}</div>}
           {schedule.special_observation && <aside aria-label="Observação específica da escala" className="mx-4 my-5 rounded-xl border border-[#F0CDCA] bg-[#FFF3F2] px-4 py-5 sm:mx-5 sm:px-5"><p className="flex items-center gap-2.5 text-sm font-semibold text-[#963F38]"><MessageSquareText size={17} className="shrink-0"/>Observação desta escala</p><p className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-[#713F3A]">{schedule.special_observation}</p></aside>}
-          {isEditing && <p className="border-t border-[#EEE8DC] bg-[#FFFDF9] px-4 py-2.5 text-xs leading-5 text-[#68645C] sm:px-5">Modo de edição ativo. Ao terminar, publique a escala ou a atualização para avisar os voluntários.</p>}
+          {isEditing && <p className="border-t border-[#EEE8DC] bg-[#FFFDF9] px-4 py-2.5 text-xs leading-5 text-[#68645C] sm:px-5">Modo de edição ativo. As alterações são salvas ao distribuir as funções. Ao terminar, conclua a edição.{!schedule.published_at && ' Publique a escala para avisar os voluntários.'}</p>}
           <div className="divide-y divide-[#EEE8DC]">{[
             { title: 'Funções principais', roles: primaryRoles, assignable: true },
             { title: 'Responsabilidades complementares', roles: complementaryRoles, assignable: true },

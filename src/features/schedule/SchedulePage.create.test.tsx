@@ -57,6 +57,7 @@ describe('create a schedule with volunteers', () => {
       p_assignments: [{ volunteer_profile_id: 'person-1', ministry_role: 'portaria' }, { volunteer_profile_id: 'person-1', ministry_role: 'leader' }],
     })
     expect(screen.getByRole('button', { name: 'Editar escala' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Publicar escala' })).toBeTruthy()
   })
 
   it('keeps the team selected when saving fails and allows retrying', async () => {

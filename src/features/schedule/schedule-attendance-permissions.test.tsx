@@ -28,6 +28,8 @@ describe('attendance access', () => {
     render(<MemoryRouter><SchedulePage /></MemoryRouter>)
     fireEvent.click(await screen.findByRole('button', { name: /Domingo às 10h.*Publicada/ }))
     if (role === 'admin') {
+      expect(screen.queryByRole('button', { name: /Publicar/ })).toBeNull()
+      expect(screen.getByRole('button', { name: 'Editar escala' })).toBeTruthy()
       expect(screen.getByRole('region', { name: 'Presença e faltas de Domingo às 10h' })).toBeTruthy()
       expect(screen.getByRole('button', { name: 'Desfazer falta' })).toBeTruthy()
       expect(mocks.from).toHaveBeenCalledWith('ministry_schedule_attendance')
