@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
 import { useNavigate, Outlet } from 'react-router-dom'
 import { ArrowLeft, CalendarDays, ChevronDown, Heart, MessageCircle, Pencil, Search, Share2, Sparkles, Trash2, UsersRound, X } from 'lucide-react'
 import { Button } from '../../components/ui/button'
@@ -270,8 +270,12 @@ export function DecisionRegistrationPage() {
   const [decidedOn, setDecidedOn] = useState(new Date().toISOString().slice(0, 10))
   const [observations, setObservations] = useState('')
 
+  const submitting = useRef(false)
+  const [saving, setSaving] = useState(false)
+
   async function submitDecision(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (submitting.current) return
     setError('')
     const result = addDecision(records, {
       fullName: name,
@@ -290,26 +294,38 @@ export function DecisionRegistrationPage() {
     }
 
     if (!supabase || !session?.user.id) { setError('Sua sessão não está ativa. Entre novamente para registrar a decisão.'); return }
-    const record = result.records[0]
-    const { data: decisionId, error: saveError } = await supabase.rpc('register_staff_decision', {
-      p_full_name: record.personName,
-      p_phone_normalized: record.phoneNormalized,
-      p_decision_type: record.type,
-      p_baptized: record.baptized,
-      p_interested_in_baptism: record.interestedInBaptism,
-      p_accepts_messages: record.acceptsMessages,
-      p_decided_on: record.decidedOn,
-      p_notes: record.observations || null,
-    })
-    if (saveError) { setError('Não foi possível registrar a decisão. Confira as migrations e as permissões do perfil.'); return }
-    if (typeof decisionId === 'string') {
-      try {
-        await supabase.functions.invoke('notify-decision-created', { body: { decisionId } })
-      } catch { /* A falha na notificação não desfaz o cadastro da decisão. */ }
+    submitting.current = true
+    setSaving(true)
+    try {
+      const record = result.records[0]
+      const { data: decisionId, error: saveError } = await supabase.rpc('register_staff_decision', {
+        p_full_name: record.personName,
+        p_phone_normalized: record.phoneNormalized,
+        p_decision_type: record.type,
+        p_baptized: record.baptized,
+        p_interested_in_baptism: record.interestedInBaptism,
+        p_accepts_messages: record.acceptsMessages,
+        p_decided_on: record.decidedOn,
+        p_notes: record.observations || null,
+      })
+      if (saveError) {
+        setError(saveError.code === '23505' ? 'Já existe uma decisão deste tipo para esta pessoa nesta data. Confira a lista de decisões.' : 'Não foi possível registrar a decisão. Confira a lista antes de reenviar e tente novamente.')
+        return
+      }
+      if (typeof decisionId === 'string') {
+        try {
+          await supabase.functions.invoke('notify-decision-created', { body: { decisionId } })
+        } catch { /* A falha na notificação não desfaz o cadastro da decisão. */ }
+      }
+      await refreshRecords()
+      setNotice('Decisão registrada e pendência de primeiro contato criada no Supabase.')
+      navigate('/decisoes')
+    } catch {
+      setError('Não foi possível confirmar o registro. Confira a lista de decisões antes de tentar novamente.')
+    } finally {
+      submitting.current = false
+      setSaving(false)
     }
-    await refreshRecords()
-    setNotice('Decisão registrada e pendência de primeiro contato criada no Supabase.')
-    navigate('/decisoes')
   }
 
   return <main className="animate-in mx-auto w-full min-w-0 max-w-3xl space-y-4 text-[#161616] sm:space-y-5">
@@ -325,7 +341,7 @@ export function DecisionRegistrationPage() {
       <fieldset><legend className="mb-2 text-sm font-medium">Aceita receber mensagem da igreja?</legend><div className="grid grid-cols-1 gap-2 rounded-xl bg-[#F7F2E8] p-1.5 min-[420px]:grid-cols-2"><Choice value="true" selected={acceptsMessages === 'true'} onSelect={setAcceptsMessages} title="Sim, aceita receber"/><Choice value="false" selected={acceptsMessages === 'false'} onSelect={setAcceptsMessages} title="Não deseja receber"/></div></fieldset>
       <label className="block text-sm font-medium">Pedido de oração ou observação pastoral<textarea className="form-input form-textarea mt-2 min-h-[110px] text-sm" maxLength={4000} value={observations} onChange={event => setObservations(event.target.value)} placeholder="Observações relevantes para o acompanhamento"/></label>
       {error && <p role="alert" className="status-negative rounded-lg border px-3 py-2.5 text-sm">{error}</p>}
-      <div className="flex flex-col-reverse gap-2 border-t border-[#E5DDCF] pt-4 sm:flex-row sm:justify-end"><Button type="button" variant="outline" onClick={() => navigate('/decisoes')} className="h-10 px-4 text-sm">Cancelar</Button><Button type="submit" className="h-10 rounded-lg bg-[#8A6729] px-5 text-sm">Registrar decisão</Button></div>
+      <div className="flex flex-col-reverse gap-2 border-t border-[#E5DDCF] pt-4 sm:flex-row sm:justify-end"><Button type="button" variant="outline" onClick={() => navigate('/decisoes')} className="h-10 px-4 text-sm">Cancelar</Button><Button type="submit" disabled={saving} className="h-10 rounded-lg bg-[#8A6729] px-5 text-sm">{saving ? 'Registrando...' : 'Registrar decisão'}</Button></div>
       <p className="text-xs leading-5 text-[#68645C]">A decisão e a pendência de acompanhamento serão gravadas no Supabase.</p>
     </form>
   </main>

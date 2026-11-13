@@ -69,3 +69,8 @@ As mensagens das três escalas usam o mesmo padrão em `_shared/schedule-notific
 A migration `202611060003_background_web_push.sql` cria as inscrições privadas por dispositivo e adiciona o estado de publicação das escalas. O cadastro público e o registro de novas decisões notificam somente perfis admin ativos que ativaram push; a publicação da escala notifica somente os voluntários atribuídos. Os avisos de visitante e decisão são genéricos e não incluem dados pessoais.
 
 Configure `VAPID_PUBLIC_KEY` e `VAPID_PRIVATE_KEY` como secrets das Edge Functions do Supabase. A chave pública fica em `src/lib/push-config.ts` e pode ser distribuída ao navegador; a chave privada nunca deve ir ao frontend ou ao GitHub. Publique as funções com `npm run functions:deploy:notifications`. Os usuários precisam ativar as notificações no dispositivo. Em iPhone/iPad, o site precisa ser adicionado à Tela de Início para receber Web Push.
+# Proteção contra decisões duplicadas
+
+A migration `202611120005_prevent_duplicate_decisions.sql` impede que `register_staff_decision` cadastre novamente a mesma pessoa, tipo de decisão e data. O bloqueio da pessoa durante a transação também serializa envios simultâneos. A repetição retorna o código `23505`, exibido no formulário como decisão já cadastrada. Outros tipos e datas continuam permitidos. Registros antigos não são removidos por essa migration, pois podem ter acompanhamentos e convites associados.
+
+Validação local: `node scripts/verify-decision-registration.mjs` e `npx vitest run src/features/decisions/DecisionRegistration.test.tsx`.
