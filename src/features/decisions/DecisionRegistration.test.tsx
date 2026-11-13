@@ -6,6 +6,8 @@ const { rpc, invoke, query } = vi.hoisted(() => ({ rpc: vi.fn(), invoke: vi.fn()
 vi.mock('../../app/AuthProvider', () => ({ useAuth: () => ({ session: { user: { id: 'staff-id' } } }) }))
 vi.mock('../../lib/supabase', () => ({ supabase: { from: query, rpc, functions: { invoke } } }))
 import { DecisionRegistrationPage, DecisionsModule } from './DecisionsPage'
+import { churchDate } from '../../lib/church-date'
+import { addDecision } from './decision-data'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -13,7 +15,7 @@ beforeEach(() => {
   for (const method of ['select', 'order', 'gte', 'is', 'limit'] as const) builder[method].mockReturnValue(builder)
   query.mockReturnValue(builder)
 })
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.useRealTimers() })
 
 function openForm() {
   render(<MemoryRouter initialEntries={['/decisoes/nova']}><Routes><Route path="/decisoes" element={<DecisionsModule />}><Route path="nova" element={<DecisionRegistrationPage />} /><Route index element={<p>Lista de decisões</p>} /></Route></Routes></MemoryRouter>)
@@ -45,4 +47,20 @@ it('explica a duplicação recusada pelo banco e libera o formulário após falh
   fireEvent.submit(form)
   expect(await screen.findByText(/Não foi possível confirmar o registro/)).toBeTruthy()
   expect((screen.getByRole('button', { name: 'Registrar decisão' }) as HTMLButtonElement).disabled).toBe(false)
+})
+
+it('usa o dia de São Paulo após 21h, mesmo quando o UTC já está no dia seguinte', () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-11-13T00:35:00Z'))
+  rpc.mockReturnValue(new Promise(() => {}))
+  const form = openForm()
+  const date = screen.getByLabelText(/Data da decisão/) as HTMLInputElement
+  expect(date.value).toBe('2026-11-12')
+  expect(date.max).toBe('2026-11-12')
+  fireEvent.submit(form)
+  expect(rpc).toHaveBeenCalledWith('register_staff_decision', expect.objectContaining({ p_decided_on: '2026-11-12' }))
+  const input = { fullName: 'Pessoa Teste', phone: '(11) 99999-0001', type: 'acceptance' as const, baptized: false, interestedInBaptism: false, acceptsMessages: true, decidedOn: '2026-11-13', observations: '' }
+  expect(addDecision([], input)).toEqual({ ok: false, error: 'date' })
+  expect(churchDate(new Date('2026-11-13T02:59:59Z'))).toBe('2026-11-12')
+  expect(churchDate(new Date('2026-11-13T03:00:00Z'))).toBe('2026-11-13')
 })

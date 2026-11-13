@@ -1,6 +1,7 @@
 import { normalizeBrazilianPhone, normalizeVisitorName } from '../../../supabase/functions/_shared/visitor-validation.ts'
 import type { VisitorPerson } from '../visitors/visitor-data'
 import type { InvitationStatus } from '../pertencer/invitation-status'
+import { churchDate } from '../../lib/church-date'
 
 export type DecisionType = 'acceptance' | 'reconciliation'
 export type FollowUpStatus = 'awaiting_first_contact' | 'contact_made' | 'awaiting_response' | 'responded' | 'invited' | 'awaiting_confirmation' | 'confirmed' | 'attended' | 'no_show' | 'declined' | 'unable_to_contact'
@@ -56,7 +57,7 @@ export function addDecision(records: DecisionRecord[], input: {
   const phoneNormalized = normalizeBrazilianPhone(input.phone)
   if (!personName) return { ok: false as const, error: 'name' as const }
   if (!phoneNormalized) return { ok: false as const, error: 'phone' as const }
-  if (!input.decidedOn || input.decidedOn > now.toISOString().slice(0, 10)) return { ok: false as const, error: 'date' as const }
+  if (!input.decidedOn || input.decidedOn > churchDate(now)) return { ok: false as const, error: 'date' as const }
   if (input.observations.length > 4000) return { ok: false as const, error: 'observations' as const }
 
   const existingDecisionPerson = records.find(record => record.phoneNormalized === phoneNormalized)
