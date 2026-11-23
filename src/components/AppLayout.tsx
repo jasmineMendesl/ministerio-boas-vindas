@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { BarChart3, CalendarDays, Coffee, HeartHandshake, LayoutDashboard, LogOut, Sparkles, UserPlus, UsersRound } from 'lucide-react'
+import { BarChart3, CalendarDays, Coffee, ContactRound, HeartHandshake, LayoutDashboard, LogOut, Sparkles, UserPlus, UsersRound } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../app/AuthProvider'
 import { Button } from './ui/button'
@@ -14,6 +14,7 @@ const links = [
   { to: '/pertencer', label: 'Projeto Pertencer', short: 'Pertencer', icon: Coffee },
   { to: '/escala', label: 'Escala', icon: CalendarDays },
   { to: '/relatorios', label: 'Relatórios', short: 'Relatórios', icon: BarChart3, adminOnly: true },
+  { to: '/usuarios', label: 'Usuários', icon: ContactRound, adminOnly: true },
 ]
 
 export function AppLayout() {

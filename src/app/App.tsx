@@ -10,10 +10,16 @@ import { PertencerPage } from '../features/pertencer/PertencerPage'
 import { PublicVisitorPage } from '../features/visitors/PublicVisitorPage'
 import { SchedulePage } from '../features/schedule/SchedulePage'
 import { ReportsPage } from '../features/reports/ReportsPage'
+import { UsersPage } from '../features/users/UsersPage'
 
 function AdminReportsRoute() {
   const { role } = useAuth()
   return role === 'admin' ? <ReportsPage /> : <Navigate to="/" replace />
+}
+
+function AdminUsersRoute() {
+  const { role } = useAuth()
+  return role === 'admin' ? <UsersPage /> : <Navigate to="/" replace />
 }
 
 export function App() {
@@ -32,6 +38,7 @@ export function App() {
           <Route path="/pertencer" element={<PertencerPage />} />
           <Route path="/escala" element={<SchedulePage />} />
           <Route path="/relatorios" element={<AdminReportsRoute />} />
+          <Route path="/usuarios" element={<AdminUsersRoute />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
