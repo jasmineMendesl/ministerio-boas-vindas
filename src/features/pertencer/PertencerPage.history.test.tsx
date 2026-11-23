@@ -6,9 +6,12 @@ const mocks = vi.hoisted(() => ({ from: vi.fn(), insert: vi.fn(), upsert: vi.fn(
 vi.mock('../../app/AuthProvider', () => ({ useAuth: () => ({ role: 'admin', session: { user: { id: 'admin' } } }) }))
 vi.mock('../../lib/supabase', () => ({ supabase: { from: mocks.from, functions: { invoke: mocks.invoke } } }))
 
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.clearAllMocks() })
 
-it('registers a past edition and saves its agenda without notifying volunteers', async () => {
+it.each([
+  { tab: 'Histórico de cafés', button: 'Registrar edição passada', hasUpcoming: true },
+  { tab: 'Roteiro do encontro', button: 'Criar edição', hasUpcoming: false },
+])('registers a past edition from $tab and saves its agenda without notifying volunteers', async ({ tab, button, hasUpcoming }) => {
   const past = { id: 'past', event_date: '2020-01-05', title: 'Café anterior', closed_at: null }
   const upcoming = { id: 'upcoming', event_date: '2099-01-01', title: 'Café futuro', closed_at: null }
   let pastCreated = false
@@ -17,7 +20,7 @@ it('registers a past edition and saves its agenda without notifying volunteers',
     let data: unknown[] = table === 'profiles' ? [{ id: 'volunteer', display_name: 'Bruna' }] : []
     const query = {
       select: () => query, order: () => query, in: () => query, is: () => query, limit: () => query,
-      gte: () => { data = [upcoming]; return query },
+      gte: () => { data = hasUpcoming ? [upcoming] : []; return query },
       or: () => { data = pastCreated ? [past] : []; return query },
       eq: (_column: string, value: string) => {
         if (table === 'pertencer_agenda_items' && value === past.id) data = agendaRows
@@ -31,11 +34,13 @@ it('registers a past edition and saves its agenda without notifying volunteers',
     return query
   })
   render(<PertencerPage />)
-  await screen.findByRole('heading', { name: /Próximo Café/ })
-  fireEvent.click(screen.getByRole('tab', { name: 'Histórico de cafés' }))
-  fireEvent.change(screen.getByLabelText('Data do café'), { target: { value: past.event_date } })
+  await screen.findByText('Nenhum convite encontrado para esta edição.')
+  fireEvent.click(screen.getByRole('tab', { name: tab }))
+  const date = screen.getByLabelText('Data do café') as HTMLInputElement
+  fireEvent.change(date, { target: { value: past.event_date } })
+  expect(date.validity.valid).toBe(true)
   fireEvent.change(screen.getByLabelText('Nome da edição'), { target: { value: past.title } })
-  fireEvent.click(screen.getByRole('button', { name: 'Registrar edição passada' }))
+  fireEvent.click(screen.getByRole('button', { name: button }))
 
   const volunteer = await screen.findByRole('combobox', { name: 'Voluntário responsável por Oração inicial' })
   fireEvent.change(volunteer, { target: { value: 'volunteer' } })
@@ -44,7 +49,7 @@ it('registers a past edition and saves its agenda without notifying volunteers',
   expect(mocks.insert).toHaveBeenCalledWith({ event_date: past.event_date, title: past.title })
   expect(mocks.upsert).toHaveBeenCalledWith(expect.arrayContaining([{ event_id: past.id, sequence: 1, title: 'Oração inicial', volunteer_profile_id: 'volunteer' }]))
   expect(mocks.invoke).not.toHaveBeenCalled()
-  expect(screen.getByRole('heading', { name: /Próximo Café.*2099/ })).toBeTruthy()
+  expect(screen.getByRole('heading', { name: hasUpcoming ? /Próximo Café.*2099/ : 'Nenhuma edição futura cadastrada' })).toBeTruthy()
 
   fireEvent.click(screen.getByRole('button', { name: 'Voltar ao histórico' }))
   fireEvent.click(await screen.findByRole('button', { name: 'Ver roteiro' }))

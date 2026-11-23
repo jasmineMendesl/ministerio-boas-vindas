@@ -215,10 +215,9 @@ export function PertencerPage() {
   async function createEvent(eventForm: FormEvent<HTMLFormElement>) {
     eventForm.preventDefault(); setError(''); setNotice('')
     if (!supabase || !isAdmin || creatingEvent || !newEventDate) return
-    const historical = activeTab === 'history'
-    const today = churchDate()
-    if (historical ? newEventDate >= today : newEventDate < today) {
-      setError(historical ? 'Escolha uma data anterior a hoje.' : 'Escolha uma data a partir de hoje.')
+    const historical = newEventDate < churchDate()
+    if (activeTab === 'history' && !historical) {
+      setError('Escolha uma data anterior a hoje.')
       return
     }
     setCreatingEvent(true)
@@ -336,7 +335,17 @@ export function PertencerPage() {
     `${item.name} ${item.decision}`.toLocaleLowerCase('pt-BR').includes(decisionSearch.toLocaleLowerCase('pt-BR')),
   )
 
-  const eventForm = <form onSubmit={createEvent} className="grid gap-3 rounded-xl border border-[#E5DDCF] bg-[#FBF9F4] p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"><label className="block text-xs font-medium">Data do café<input className="form-input mt-1.5 h-10 text-sm" type="date" min={activeTab === 'agenda' ? churchDate() : undefined} required value={newEventDate} onChange={e => setNewEventDate(e.target.value)}/></label><label className="block text-xs font-medium">Nome da edição<input className="form-input mt-1.5 h-10 text-sm" maxLength={120} required value={newEventTitle} onChange={e => setNewEventTitle(e.target.value)}/></label><button type="submit" disabled={creatingEvent} className="inline-flex h-10 items-center justify-center rounded-lg bg-[#8A6729] px-4 text-sm font-medium text-white disabled:opacity-60">{creatingEvent ? 'Salvando…' : activeTab === 'history' ? 'Registrar edição passada' : 'Criar edição'}</button></form>
+  const eventForm = <form onSubmit={createEvent} className="grid gap-3 rounded-xl border border-[#E5DDCF] bg-[#FBF9F4] p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+    <label className="block text-xs font-medium">Data do café
+      <input className="form-input mt-1.5 h-10 text-sm" type="date" required value={newEventDate} onChange={e => setNewEventDate(e.target.value)}/>
+    </label>
+    <label className="block text-xs font-medium">Nome da edição
+      <input className="form-input mt-1.5 h-10 text-sm" maxLength={120} required value={newEventTitle} onChange={e => setNewEventTitle(e.target.value)}/>
+    </label>
+    <button type="submit" disabled={creatingEvent} className="inline-flex h-10 items-center justify-center rounded-lg bg-[#8A6729] px-4 text-sm font-medium text-white disabled:opacity-60">
+      {creatingEvent ? 'Salvando…' : activeTab === 'history' ? 'Registrar edição passada' : 'Criar edição'}
+    </button>
+  </form>
 
   return <div className="animate-in space-y-4 text-[#161616] sm:space-y-5">
     {role === 'team' && <div role="status" className="rounded-lg border border-[#E5DDCF] bg-white px-3 py-2 text-xs text-[#34322E]">Acesso de visualização: a equipe pode consultar esta tela, mas não criar nem alterar dados do Projeto Pertencer.</div>}
@@ -359,6 +368,7 @@ export function PertencerPage() {
     {activeTab === 'agenda' && <section className="space-y-5 rounded-2xl border border-[#D9CCB2] bg-white p-4 shadow-[0_3px_14px_rgba(0,0,0,.035)] sm:p-6">
       <header><p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#8A6729]"><ClipboardList size={15}/> Roteiro do café</p><h2 className="mt-2 text-xl font-semibold">Programação e voluntários</h2><p className="mt-1 text-sm text-[#68645C]">{agendaEvent ? `${agendaEvent.title} · ${formatDate(agendaEvent.event_date)}` : 'Cadastre uma edição para definir os responsáveis.'}</p></header>
       {historyAgenda && <button type="button" onClick={() => { setHistoryAgenda(null); setActiveTab('history') }} className="text-sm font-medium text-[#7B571F]">Voltar ao histórico</button>}
+      {isAdmin && event && !historyAgenda && <button type="button" onClick={() => setActiveTab('history')} className="text-sm font-medium text-[#7B571F]">Registrar edição passada</button>}
       {!agendaEvent && isAdmin && eventForm}
       {!agendaEvent && !isAdmin && <p className="rounded-xl bg-[#FBF9F4] p-4 text-sm text-[#68645C]">O roteiro estará disponível quando uma edição futura for cadastrada.</p>}
       {agendaEvent && <>
