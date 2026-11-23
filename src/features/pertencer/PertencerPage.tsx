@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { CalendarDays, CheckCircle2, Coffee, MoreVertical, Pencil, Plus, Search, Trash2, UsersRound, X, XCircle, Clock3, Save, ClipboardList } from 'lucide-react'
 import { useAuth } from '../../app/AuthProvider'
 import { supabase } from '../../lib/supabase'
+import { churchDate } from '../../lib/church-date'
 import { PageHeader } from '../../components/PageHeader'
 import { PageTabs } from '../../components/PageTabs'
 import { editableInvitationStatuses, invitationStatusForDisplay, invitationStatusLabels, invitationStatusTones, type InvitationStatus } from './invitation-status'
@@ -19,7 +20,6 @@ const label = invitationStatusLabels
 const tone = invitationStatusTones
 type Filter = 'all' | Exclude<InvitationStatus, 'absent' | 'present'>
 
-function localDate() { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}` }
 function formatDate(value: string) { return new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { dateStyle: 'long' }) }
 function Metric({ icon: Icon, label, value, color }: { icon: typeof UsersRound; label: string; value: number; color: string }) {
   return <article className={`flex min-w-0 items-center gap-3 rounded-xl border p-3.5 ${color}`}><span className="grid size-10 shrink-0 place-items-center rounded-lg bg-white/80"><Icon size={18}/></span><div><p className="text-xs">{label}</p><p className="mt-1 text-lg font-semibold">{value}</p></div></article>
@@ -39,7 +39,8 @@ export function PertencerPage() {
   const [volunteers, setVolunteers] = useState<Volunteer[]>([])
   const [assignments, setAssignments] = useState<Record<number, string>>({})
   const [loading, setLoading] = useState(true)
-  const [agendaLoading, setAgendaLoading] = useState(false)
+  const [loadedAgendaId, setLoadedAgendaId] = useState<string | null>(null)
+  const [agendaError, setAgendaError] = useState('')
   const [savingAgenda, setSavingAgenda] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -48,6 +49,7 @@ export function PertencerPage() {
   const [savingStatusId, setSavingStatusId] = useState<string | null>(null)
   const [savingCheckinId, setSavingCheckinId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('guests')
+  const [historyAgenda, setHistoryAgenda] = useState<Event | null>(null)
   const [newEventDate, setNewEventDate] = useState('')
   const [newEventTitle, setNewEventTitle] = useState('Projeto Pertencer')
   const [creatingEvent, setCreatingEvent] = useState(false)
@@ -65,11 +67,13 @@ export function PertencerPage() {
   const [decisionSearch, setDecisionSearch] = useState('')
   const [decisionCandidatesLoading, setDecisionCandidatesLoading] = useState(false)
   const [addingDecisionId, setAddingDecisionId] = useState<string | null>(null)
+  const agendaEvent = historyAgenda ?? event
+  const agendaEventId = agendaEvent?.id
 
   const loadEventAndGuests = useCallback(async () => {
     if (!supabase || !session?.user.id) { setError('Entre com uma conta autorizada para consultar as edições.'); setLoading(false); return }
     setLoading(true); setError('')
-    const today = localDate()
+    const today = churchDate()
     const eventResult = await supabase.from('pertencer_events').select('id,event_date,title,closed_at').gte('event_date', today).is('closed_at', null).order('event_date', { ascending: true }).limit(1)
     if (eventResult.error) { setError('Não foi possível carregar as edições. Verifique as permissões do perfil.'); setEvent(null); setInvitations([]); setLoading(false); return }
     const selectedEvent = (eventResult.data?.[0] as Event | undefined) ?? null
@@ -96,7 +100,7 @@ export function PertencerPage() {
   const loadHistory = useCallback(async () => {
     if (!supabase || !session?.user.id) { setHistoryError('Entre com uma conta autorizada para consultar o histórico.'); setHistoryLoading(false); return }
     setHistoryLoading(true); setHistoryError('')
-    const editionsResult = await supabase.from('pertencer_events').select('id,event_date,title,closed_at').or(`event_date.lt.${localDate()},closed_at.not.is.null`).order('event_date', { ascending: false })
+    const editionsResult = await supabase.from('pertencer_events').select('id,event_date,title,closed_at').or(`event_date.lt.${churchDate()},closed_at.not.is.null`).order('event_date', { ascending: false })
     if (editionsResult.error) { setHistoryError('Não foi possível carregar o histórico de cafés.'); setHistoryEditions([]); setHistoryLoading(false); return }
     const editions = (editionsResult.data ?? []) as Event[]
     if (!editions.length) { setHistoryEditions([]); setHistoryLoading(false); return }
@@ -112,28 +116,31 @@ export function PertencerPage() {
     setHistoryLoading(false)
   }, [session?.user.id])
 
-  const loadAgenda = useCallback(async () => {
-    if (!supabase || !session?.user.id || !event) return
-    setAgendaLoading(true)
-    const [volunteerResult, agendaResult] = await Promise.all([
-      supabase.from('profiles').select('id,display_name').eq('active', true).order('display_name'),
-      supabase.from('pertencer_agenda_items').select('sequence,title,volunteer_profile_id').eq('event_id', event.id).order('sequence'),
-    ])
-    if (volunteerResult.error || agendaResult.error) {
-      setError('Não foi possível carregar o roteiro ou os perfis dos voluntários. Confira se as migrations estão aplicadas.')
-      setAgendaLoading(false)
-      return
-    }
-    setVolunteers((volunteerResult.data ?? []) as Volunteer[])
-    const nextAssignments: Record<number, string> = {}
-    for (const item of (agendaResult.data ?? []) as AgendaRecord[]) if (item.volunteer_profile_id) nextAssignments[item.sequence] = item.volunteer_profile_id
-    setAssignments(nextAssignments)
-    setAgendaLoading(false)
-  }, [event, session?.user.id])
-
   useEffect(() => { void loadEventAndGuests() }, [loadEventAndGuests])
-  useEffect(() => { if (activeTab === 'agenda' && event) void loadAgenda() }, [activeTab, event, loadAgenda])
   useEffect(() => { if (activeTab === 'history') void loadHistory() }, [activeTab, loadHistory])
+  useEffect(() => {
+    setLoadedAgendaId(null)
+    setAgendaError('')
+    const client = supabase
+    if (activeTab !== 'agenda' || !client || !session?.user.id || !agendaEventId) return
+    let cancelled = false
+    void Promise.all([
+      client.from('profiles').select('id,display_name').eq('active', true).order('display_name'),
+      client.from('pertencer_agenda_items').select('sequence,title,volunteer_profile_id').eq('event_id', agendaEventId).order('sequence'),
+    ]).then(([volunteerResult, agendaResult]) => {
+      if (cancelled) return
+      if (volunteerResult.error || agendaResult.error) {
+        setAgendaError('Não foi possível carregar o roteiro ou os perfis dos voluntários.')
+        return
+      }
+      setVolunteers((volunteerResult.data ?? []) as Volunteer[])
+      const nextAssignments: Record<number, string> = {}
+      for (const item of (agendaResult.data ?? []) as AgendaRecord[]) if (item.volunteer_profile_id) nextAssignments[item.sequence] = item.volunteer_profile_id
+      setAssignments(nextAssignments)
+      setLoadedAgendaId(agendaEventId)
+    })
+    return () => { cancelled = true }
+  }, [activeTab, agendaEventId, session?.user.id])
 
   const filtered = useMemo(() => invitations.filter(item => `${item.name} ${item.phone}`.toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR')) && (filter === 'all' || item.confirmation === filter)), [invitations, query, filter])
   const counts = {
@@ -144,6 +151,12 @@ export function PertencerPage() {
     confirmed: invitations.filter(item => item.confirmation === 'confirmed').length,
   }
   const tabs = [{ id: 'guests', label: 'Lista de convidados' }, { id: 'history', label: 'Histórico de cafés' }, { id: 'agenda', label: 'Roteiro do encontro' }]
+
+  function openHistoryAgenda(edition: Event) {
+    setError(''); setNotice('')
+    setHistoryAgenda(edition)
+    setActiveTab('agenda')
+  }
 
   async function updateInvitationStatus(invitation: Invitation, status: Exclude<InvitationStatus, 'absent'>) {
     if (!supabase || !event || !isAdmin) return
@@ -174,12 +187,17 @@ export function PertencerPage() {
   }
 
   async function saveAgenda() {
-    if (!supabase || !event || !isAdmin) return
+    if (!supabase || !agendaEvent || !isAdmin || savingAgenda || loadedAgendaId !== agendaEvent.id) return
     setSavingAgenda(true); setError(''); setNotice('')
-    const rows = agendaItems.map((title, index) => ({ event_id: event.id, sequence: index + 1, title, volunteer_profile_id: assignments[index + 1] || null }))
+    const rows = agendaItems.map((title, index) => ({ event_id: agendaEvent.id, sequence: index + 1, title, volunteer_profile_id: assignments[index + 1] || null }))
     const { error: saveError } = await supabase.from('pertencer_agenda_items').upsert(rows, { onConflict: 'event_id,sequence' })
     if (saveError) { setSavingAgenda(false); setError('Não foi possível salvar as atribuições do roteiro.'); return }
-    const { data: notification, error: notificationError } = await supabase.functions.invoke('notify-pertencer-volunteers', { body: { eventId: event.id } })
+    if (historyAgenda || agendaEvent.closed_at || agendaEvent.event_date < churchDate()) {
+      setSavingAgenda(false)
+      setNotice('Roteiro atualizado no histórico.')
+      return
+    }
+    const { data: notification, error: notificationError } = await supabase.functions.invoke('notify-pertencer-volunteers', { body: { eventId: agendaEvent.id } })
     setSavingAgenda(false)
     if (!notificationError && notification?.recipients === 0) {
       setNotice('Roteiro salvo. Ainda não há voluntários atribuídos para notificar nesta edição.')
@@ -196,11 +214,23 @@ export function PertencerPage() {
 
   async function createEvent(eventForm: FormEvent<HTMLFormElement>) {
     eventForm.preventDefault(); setError(''); setNotice('')
-    if (!supabase || !isAdmin) return
+    if (!supabase || !isAdmin || creatingEvent || !newEventDate) return
+    const historical = activeTab === 'history'
+    const today = churchDate()
+    if (historical ? newEventDate >= today : newEventDate < today) {
+      setError(historical ? 'Escolha uma data anterior a hoje.' : 'Escolha uma data a partir de hoje.')
+      return
+    }
     setCreatingEvent(true)
     const { data, error: createError } = await supabase.from('pertencer_events').insert({ event_date: newEventDate, title: newEventTitle.trim() || 'Projeto Pertencer' }).select('id,event_date,title,closed_at').single()
     setCreatingEvent(false)
     if (createError || !data) { setError(createError?.code === '23505' ? 'Já existe uma edição nesta data.' : 'Não foi possível cadastrar a edição.'); return }
+    setNewEventDate('')
+    if (historical) {
+      openHistoryAgenda(data as Event)
+      setNotice('Edição registrada. Preencha o roteiro e salve as atribuições.')
+      return
+    }
     setEvent(data as Event)
     await loadEventAndGuests()
     setNotice('Edição cadastrada. Os convites pendentes e o roteiro já estão disponíveis.')
@@ -306,6 +336,8 @@ export function PertencerPage() {
     `${item.name} ${item.decision}`.toLocaleLowerCase('pt-BR').includes(decisionSearch.toLocaleLowerCase('pt-BR')),
   )
 
+  const eventForm = <form onSubmit={createEvent} className="grid gap-3 rounded-xl border border-[#E5DDCF] bg-[#FBF9F4] p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"><label className="block text-xs font-medium">Data do café<input className="form-input mt-1.5 h-10 text-sm" type="date" min={activeTab === 'agenda' ? churchDate() : undefined} required value={newEventDate} onChange={e => setNewEventDate(e.target.value)}/></label><label className="block text-xs font-medium">Nome da edição<input className="form-input mt-1.5 h-10 text-sm" maxLength={120} required value={newEventTitle} onChange={e => setNewEventTitle(e.target.value)}/></label><button type="submit" disabled={creatingEvent} className="inline-flex h-10 items-center justify-center rounded-lg bg-[#8A6729] px-4 text-sm font-medium text-white disabled:opacity-60">{creatingEvent ? 'Salvando…' : activeTab === 'history' ? 'Registrar edição passada' : 'Criar edição'}</button></form>
+
   return <div className="animate-in space-y-4 text-[#161616] sm:space-y-5">
     {role === 'team' && <div role="status" className="rounded-lg border border-[#E5DDCF] bg-white px-3 py-2 text-xs text-[#34322E]">Acesso de visualização: a equipe pode consultar esta tela, mas não criar nem alterar dados do Projeto Pertencer.</div>}
     {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
@@ -315,7 +347,7 @@ export function PertencerPage() {
       <div className="flex items-start justify-between gap-2 border-b border-[#E5DDCF] pb-4"><div className="min-w-0"><p className="flex items-center gap-2 text-xs font-medium text-[#8A6729]"><CalendarDays size={15}/>{event?.title ?? 'Edição do Projeto Pertencer'}</p><h2 className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">{event ? `Próximo Café: ${formatDate(event.event_date)}` : 'Nenhuma edição futura cadastrada'}</h2></div>{isAdmin && event && <details className="group relative shrink-0"><summary aria-label="Ações da edição" title="Ações da edição" className="grid size-10 cursor-pointer list-none place-items-center rounded-lg border border-[#E5DDCF] bg-white text-[#34322E] hover:bg-[#FBF9F4] [&::-webkit-details-marker]:hidden"><MoreVertical size={19}/></summary><div className="absolute right-0 top-11 z-20 min-w-52 rounded-xl border border-[#E5DDCF] bg-white p-1.5 shadow-xl"><button type="button" onClick={() => { setShowDecisionPicker(true); setDecisionSearch(''); void loadDecisionCandidates() }} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-[#6B4F1D] hover:bg-[#F7F2E8]"><Plus size={15}/>Adicionar decisão</button><button type="button" onClick={startEventEdit} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-[#34322E] hover:bg-[#F7F2E8]"><Pencil size={15}/>Editar edição</button><button type="button" onClick={() => { setEventActionError(''); setConfirmDeleteEvent(true) }} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-[#9B3B32] hover:bg-[#FFF1EF]"><Trash2 size={15}/>Excluir edição</button><button type="button" onClick={() => { setError(''); setConfirmCloseEvent(true) }} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-[#9B3B32] hover:bg-[#FFF1EF]"><XCircle size={15}/>Encerrar edição</button></div></details>}</div>
       <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5 sm:gap-3"><Metric icon={UsersRound} label="Convidados" value={counts.all} color="status-neutral"/><Metric icon={Clock3} label="Pendente" value={counts.pending} color="status-pending"/><Metric icon={Clock3} label="Não respondido" value={counts.no_response} color="status-pending"/><Metric icon={XCircle} label="Não vai comparecer" value={counts.declined} color="status-negative"/><Metric icon={CheckCircle2} label="Vai comparecer" value={counts.confirmed} color="status-positive"/></div>
     </section>
-    <PageTabs ariaLabel="Seções do Projeto Pertencer" activeId={activeTab} onChange={setActiveTab} tabs={tabs}/>
+    <PageTabs ariaLabel="Seções do Projeto Pertencer" activeId={activeTab} onChange={tab => { setHistoryAgenda(null); setActiveTab(tab) }} tabs={tabs}/>
 
     {activeTab === 'guests' && <>
       <div className="flex flex-col gap-2 rounded-xl border border-[#E5DDCF] bg-white p-3 sm:flex-row sm:items-center sm:gap-3 sm:px-4"><div className="flex min-w-0 items-center gap-2 overflow-x-auto pb-1 text-xs"><span className="shrink-0 text-[#68645C]">Filtro rápido:</span>{(['all', ...editableInvitationStatuses] as Filter[]).map(value => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)} className={`shrink-0 rounded-full px-3 py-1.5 font-medium ${filter === value ? 'bg-[#EBDCBB] text-[#6B4F1D]' : 'bg-[#F7F2E8] text-[#68645C]'}`}>{value === 'all' ? `Todos (${counts.all})` : `${label[value]} (${counts[value]})`}</button>)}</div></div>
@@ -325,17 +357,18 @@ export function PertencerPage() {
     </>}
 
     {activeTab === 'agenda' && <section className="space-y-5 rounded-2xl border border-[#D9CCB2] bg-white p-4 shadow-[0_3px_14px_rgba(0,0,0,.035)] sm:p-6">
-      <header><p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#8A6729]"><ClipboardList size={15}/> Roteiro do café</p><h2 className="mt-2 text-xl font-semibold">Programação e voluntários</h2><p className="mt-1 text-sm text-[#68645C]">Defina quem ficará responsável por cada parte desta edição.</p></header>
-      {!event && isAdmin && <form onSubmit={createEvent} className="grid gap-3 rounded-xl border border-[#E5DDCF] bg-[#FBF9F4] p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"><label className="block text-xs font-medium">Data do café<input className="form-input mt-1.5 h-10 text-sm" type="date" min={localDate()} required value={newEventDate} onChange={e => setNewEventDate(e.target.value)}/></label><label className="block text-xs font-medium">Nome da edição<input className="form-input mt-1.5 h-10 text-sm" maxLength={120} required value={newEventTitle} onChange={e => setNewEventTitle(e.target.value)}/></label><button type="submit" disabled={creatingEvent} className="inline-flex h-10 items-center justify-center rounded-lg bg-[#8A6729] px-4 text-sm font-medium text-white disabled:opacity-60">{creatingEvent ? 'Salvando…' : 'Criar edição'}</button></form>}
-      {!event && !isAdmin && <p className="rounded-xl bg-[#FBF9F4] p-4 text-sm text-[#68645C]">O roteiro estará disponível quando uma edição futura for cadastrada.</p>}
-      {event && <>
-        {agendaLoading ? <p role="status" className="text-sm text-[#68645C]">Carregando roteiro e voluntários…</p> : <div className="space-y-2">{agendaItems.map((item, index) => <label key={item} className="grid gap-2 rounded-xl border border-[#E5DDCF] p-3 sm:grid-cols-[48px_minmax(0,1fr)_minmax(200px,.8fr)] sm:items-center"><span className="grid size-9 place-items-center rounded-lg bg-[#F0E6D2] text-sm font-semibold text-[#8A6729]">{String(index + 1).padStart(2, '0')}</span><span className="text-sm font-medium">{item}</span><select aria-label={`Voluntário responsável por ${item}`} disabled={!isAdmin} className="h-10 rounded-lg border border-[#D9CCB2] bg-white px-3 text-sm disabled:bg-[#F7F2E8]" value={assignments[index + 1] ?? ''} onChange={e => setAssignments(current => ({ ...current, [index + 1]: e.target.value }))}><option value="">{volunteers.length ? 'Selecionar voluntário' : 'Nenhum voluntário cadastrado'}</option>{volunteers.map(volunteer => <option key={volunteer.id} value={volunteer.id}>{volunteer.display_name}</option>)}</select></label>)}</div>}
-        {isAdmin && <div className="flex justify-end"><button type="button" onClick={() => void saveAgenda()} disabled={savingAgenda || agendaLoading} className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#8A6729] px-4 text-sm font-medium text-white disabled:opacity-60"><Save size={15}/>{savingAgenda ? 'Salvando…' : 'Salvar roteiro'}</button></div>}
+      <header><p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#8A6729]"><ClipboardList size={15}/> Roteiro do café</p><h2 className="mt-2 text-xl font-semibold">Programação e voluntários</h2><p className="mt-1 text-sm text-[#68645C]">{agendaEvent ? `${agendaEvent.title} · ${formatDate(agendaEvent.event_date)}` : 'Cadastre uma edição para definir os responsáveis.'}</p></header>
+      {historyAgenda && <button type="button" onClick={() => { setHistoryAgenda(null); setActiveTab('history') }} className="text-sm font-medium text-[#7B571F]">Voltar ao histórico</button>}
+      {!agendaEvent && isAdmin && eventForm}
+      {!agendaEvent && !isAdmin && <p className="rounded-xl bg-[#FBF9F4] p-4 text-sm text-[#68645C]">O roteiro estará disponível quando uma edição futura for cadastrada.</p>}
+      {agendaEvent && <>
+        {agendaError ? <p role="alert" className="text-sm text-red-800">{agendaError}</p> : loadedAgendaId !== agendaEvent.id ? <p role="status" className="text-sm text-[#68645C]">Carregando roteiro e voluntários…</p> : <div className="space-y-2">{agendaItems.map((item, index) => <label key={item} className="grid gap-2 rounded-xl border border-[#E5DDCF] p-3 sm:grid-cols-[48px_minmax(0,1fr)_minmax(200px,.8fr)] sm:items-center"><span className="grid size-9 place-items-center rounded-lg bg-[#F0E6D2] text-sm font-semibold text-[#8A6729]">{String(index + 1).padStart(2, '0')}</span><span className="text-sm font-medium">{item}</span><select aria-label={`Voluntário responsável por ${item}`} disabled={!isAdmin || savingAgenda} className="h-10 rounded-lg border border-[#D9CCB2] bg-white px-3 text-sm disabled:bg-[#F7F2E8]" value={assignments[index + 1] ?? ''} onChange={e => setAssignments(current => ({ ...current, [index + 1]: e.target.value }))}><option value="">{volunteers.length ? 'Selecionar voluntário' : 'Nenhum voluntário cadastrado'}</option>{volunteers.map(volunteer => <option key={volunteer.id} value={volunteer.id}>{volunteer.display_name}</option>)}</select></label>)}</div>}
+        {isAdmin && <div className="flex justify-end"><button type="button" onClick={() => void saveAgenda()} disabled={savingAgenda || loadedAgendaId !== agendaEvent.id} className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#8A6729] px-4 text-sm font-medium text-white disabled:opacity-60"><Save size={15}/>{savingAgenda ? 'Salvando…' : 'Salvar roteiro'}</button></div>}
         {!isAdmin && <p className="text-xs text-[#68645C]">Somente administradores podem cadastrar voluntários ou alterar as atribuições.</p>}
       </>}
     </section>}
 
-    {activeTab === 'history' && <section className="space-y-4">{historyError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{historyError}</p>}{historyLoading ? <p role="status" className="rounded-xl border border-[#E5DDCF] bg-white p-6 text-center text-sm text-[#68645C]">Carregando histórico de cafés...</p> : historyEditions.length ? historyEditions.map(edition => <article key={edition.id} className="overflow-hidden rounded-2xl border border-[#D9CCB2] bg-white shadow-[0_3px_14px_rgba(0,0,0,.035)]"><header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E5DDCF] bg-[#FBF9F4] px-4 py-3"><div><p className="text-xs font-medium text-[#8A6729]">{edition.title}</p><h2 className="mt-1 font-semibold">Café de {formatDate(edition.event_date)}</h2></div><span className="rounded-full bg-[#F0E6D2] px-3 py-1 text-xs text-[#68645C]">{edition.guests.length} convidado(s)</span>{isAdmin && <button type="button" aria-label={`Excluir edição ${edition.title}`} title="Excluir edição" onClick={() => { setHistoryDeleteError(''); setHistoryEditionToDelete(edition) }} className="grid size-9 place-items-center rounded-lg text-[#9B3B32] hover:bg-[#FFF1EF]"><Trash2 size={16}/></button>}</header>{edition.guests.length ? <div className="overflow-x-auto"><table className="w-full min-w-[560px] border-collapse text-left text-sm"><thead className="bg-white text-xs font-semibold text-[#34322E]"><tr><th className="px-4 py-3">Convidado</th><th className="px-3 py-3">Status do convite</th><th className="px-3 py-3">Presença</th></tr></thead><tbody>{edition.guests.map(guest => <tr key={guest.id} className="border-t border-[#E5DDCF]"><td className="px-4 py-3"><p className="font-semibold">{guest.name}</p><p className="mt-0.5 text-xs text-[#68645C]">{guest.phone}</p></td><td className="px-3 py-3"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${tone[guest.attendance]}`}>{label[guest.attendance]}</span></td><td className="px-3 py-3">{isAdmin ? <select aria-label={`Presença de ${guest.name} em ${edition.title}`} value={guest.attended ? 'true' : 'false'} disabled={savingCheckinId === guest.id} onChange={e => void updateCheckin(guest.id, e.target.value === 'true')} className={`h-9 rounded-lg border px-2 text-xs font-medium ${guest.attended ? 'status-positive' : 'status-negative'} disabled:opacity-60`}><option value="true">Veio</option><option value="false">Não veio</option></select> : guest.attended ? <span className="status-positive inline-flex rounded-full border px-2.5 py-1 text-xs">Veio</span> : <span className="status-negative inline-flex rounded-full border px-2.5 py-1 text-xs">Não veio</span>}</td></tr>)}</tbody></table></div> : <p className="px-4 py-6 text-center text-sm text-[#68645C]">Nenhum convidado foi associado a esta edição.</p>}</article>) : <section className="empty-panel min-h-[260px]"><span className="empty-icon"><ClipboardList size={22}/></span><h2 className="mt-4 text-lg font-semibold">Histórico de cafés</h2><p className="mt-2 max-w-md text-sm leading-6 text-[#68645C]">As edições anteriores aparecerão aqui automaticamente a partir do dia seguinte ao café, com seus convidados e presenças.</p></section>}</section>}
+    {activeTab === 'history' && <section className="space-y-4">{isAdmin && eventForm}{historyError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{historyError}</p>}{historyLoading ? <p role="status" className="rounded-xl border border-[#E5DDCF] bg-white p-6 text-center text-sm text-[#68645C]">Carregando histórico de cafés...</p> : historyEditions.length ? historyEditions.map(edition => <article key={edition.id} className="overflow-hidden rounded-2xl border border-[#D9CCB2] bg-white shadow-[0_3px_14px_rgba(0,0,0,.035)]"><header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E5DDCF] bg-[#FBF9F4] px-4 py-3"><div><p className="text-xs font-medium text-[#8A6729]">{edition.title}</p><h2 className="mt-1 font-semibold">Café de {formatDate(edition.event_date)}</h2></div><span className="rounded-full bg-[#F0E6D2] px-3 py-1 text-xs text-[#68645C]">{edition.guests.length} convidado(s)</span><button type="button" onClick={() => openHistoryAgenda(edition)} className="min-h-9 rounded-lg border border-[#D9CCB2] px-3 text-sm font-medium text-[#6B4F1D]">Ver roteiro</button>{isAdmin && <button type="button" aria-label={`Excluir edição ${edition.title}`} title="Excluir edição" onClick={() => { setHistoryDeleteError(''); setHistoryEditionToDelete(edition) }} className="grid size-9 place-items-center rounded-lg text-[#9B3B32] hover:bg-[#FFF1EF]"><Trash2 size={16}/></button>}</header>{edition.guests.length ? <div className="overflow-x-auto"><table className="w-full min-w-[560px] border-collapse text-left text-sm"><thead className="bg-white text-xs font-semibold text-[#34322E]"><tr><th className="px-4 py-3">Convidado</th><th className="px-3 py-3">Status do convite</th><th className="px-3 py-3">Presença</th></tr></thead><tbody>{edition.guests.map(guest => <tr key={guest.id} className="border-t border-[#E5DDCF]"><td className="px-4 py-3"><p className="font-semibold">{guest.name}</p><p className="mt-0.5 text-xs text-[#68645C]">{guest.phone}</p></td><td className="px-3 py-3"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${tone[guest.attendance]}`}>{label[guest.attendance]}</span></td><td className="px-3 py-3">{isAdmin ? <select aria-label={`Presença de ${guest.name} em ${edition.title}`} value={guest.attended ? 'true' : 'false'} disabled={savingCheckinId === guest.id} onChange={e => void updateCheckin(guest.id, e.target.value === 'true')} className={`h-9 rounded-lg border px-2 text-xs font-medium ${guest.attended ? 'status-positive' : 'status-negative'} disabled:opacity-60`}><option value="true">Veio</option><option value="false">Não veio</option></select> : guest.attended ? <span className="status-positive inline-flex rounded-full border px-2.5 py-1 text-xs">Veio</span> : <span className="status-negative inline-flex rounded-full border px-2.5 py-1 text-xs">Não veio</span>}</td></tr>)}</tbody></table></div> : <p className="px-4 py-6 text-center text-sm text-[#68645C]">Nenhum convidado foi associado a esta edição.</p>}</article>) : <section className="empty-panel min-h-[260px]"><span className="empty-icon"><ClipboardList size={22}/></span><h2 className="mt-4 text-lg font-semibold">Histórico de cafés</h2><p className="mt-2 max-w-md text-sm leading-6 text-[#68645C]">As edições anteriores aparecerão aqui automaticamente a partir do dia seguinte ao café, com seus convidados e presenças.</p></section>}</section>}
     {confirmCloseEvent && event && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4"><section role="alertdialog" aria-modal="true" aria-labelledby="close-event-title" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"><div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#F0E6D2] text-[#8A6729]"><CheckCircle2 size={18}/></span><div><h2 id="close-event-title" className="text-lg font-semibold">Encerrar esta edição do café</h2><p className="mt-1 text-sm leading-5 text-[#68645C]">A edição de {formatDate(event.event_date)} sairá da lista atual e ficará no histórico. Os convidados já registrados serão mantidos. Novas decisões serão vinculadas à próxima edição aberta.</p></div></div>{error && <p role="alert" className="status-negative mt-3 rounded-lg border px-3 py-2 text-sm">{error}</p>}<div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" disabled={closingEvent} onClick={() => setConfirmCloseEvent(false)} className="min-h-10 rounded-lg border border-[#E5DDCF] px-4 text-sm font-medium">Cancelar</button><button type="button" disabled={closingEvent} onClick={() => void closeCurrentEvent()} className="min-h-10 rounded-lg bg-[#8A6729] px-4 text-sm font-semibold text-white disabled:opacity-60">{closingEvent ? 'Encerrando...' : 'Confirmar encerramento'}</button></div></section></div>}
     {editingEvent && event && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/45 p-4"><section role="dialog" aria-modal="true" aria-labelledby="edit-event-title" className="my-auto w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[.14em] text-[#8A6729]">Projeto Pertencer</p><h2 id="edit-event-title" className="mt-1 text-lg font-semibold">Editar edição</h2></div><button type="button" aria-label="Fechar edição" onClick={() => setEditingEvent(false)} className="rounded-lg p-2 text-[#68645C]"><X size={17}/></button></div><form onSubmit={saveEventEdit} className="mt-5 space-y-4"><label className="block text-sm font-medium">Data do café<input type="date" required className="form-input mt-1.5 h-10 text-sm" value={editEventDate} onChange={e => setEditEventDate(e.target.value)}/></label><label className="block text-sm font-medium">Nome da edição<input required maxLength={120} className="form-input mt-1.5 h-10 text-sm" value={editEventTitle} onChange={e => setEditEventTitle(e.target.value)}/></label><p className="text-xs leading-5 text-[#68645C]">Os convidados e presenças serão mantidos nesta edição.</p>{eventActionError && <p role="alert" className="status-negative rounded-lg border px-3 py-2 text-sm">{eventActionError}</p>}<div className="flex flex-col-reverse gap-2 border-t border-[#E5DDCF] pt-4 sm:flex-row sm:justify-end"><button type="button" onClick={() => setEditingEvent(false)} className="min-h-10 rounded-lg border border-[#E5DDCF] px-4 text-sm">Cancelar</button><button type="submit" disabled={savingEventEdit} className="min-h-10 rounded-lg bg-[#8A6729] px-4 text-sm font-semibold text-white disabled:opacity-60">{savingEventEdit ? 'Salvando...' : 'Salvar edição'}</button></div></form></section></div>}
     {historyEditionToDelete && isAdmin && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4"><section role="alertdialog" aria-modal="true" aria-labelledby="delete-history-edition-title" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"><div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#FFF1EF] text-[#9B3B32]"><Trash2 size={18}/></span><div><h2 id="delete-history-edition-title" className="text-lg font-semibold">Excluir edição do histórico?</h2><p className="mt-1 text-sm leading-5 text-[#68645C]">A edição “{historyEditionToDelete.title}” de {formatDate(historyEditionToDelete.event_date)} e seus {historyEditionToDelete.guests.length} convites serão excluídos permanentemente, incluindo presenças e roteiro. Cadastros de pessoas e decisões serão mantidos.</p></div></div>{historyDeleteError && <p role="alert" className="status-negative mt-3 rounded-lg border px-3 py-2 text-sm">{historyDeleteError}</p>}<div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" disabled={deletingHistoryEdition} onClick={() => setHistoryEditionToDelete(null)} className="min-h-10 rounded-lg border border-[#E5DDCF] px-4 text-sm">Cancelar</button><button type="button" disabled={deletingHistoryEdition} onClick={() => void deleteHistoryEdition()} className="min-h-10 rounded-lg bg-[#9B3B32] px-4 text-sm font-semibold text-white disabled:opacity-60">{deletingHistoryEdition ? 'Excluindo...' : 'Confirmar exclusão'}</button></div></section></div>}
