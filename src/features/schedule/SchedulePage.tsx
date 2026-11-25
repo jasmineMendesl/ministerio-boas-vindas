@@ -9,7 +9,7 @@ import { ScheduleHistoryTable } from './ScheduleHistoryTable'
 import { ExtraSchedulesPanel } from './ExtraSchedulesPanel'
 import { DeleteScheduleDialog } from './DeleteScheduleDialog'
 import { CreateScheduleDialog, type NewScheduleAssignment } from './CreateScheduleDialog'
-import { scheduledOnThursdayThisWeek, servedSameServiceLastWeek } from './assignment-warnings'
+import { scheduledOnThursdayThisWeek, servedSameServiceLastWeek, volunteerIdsInOtherServices } from './assignment-warnings'
 const primaryRoles = [
   ['portaria', 'Portaria'],
   ['seat_direction', 'Direcionamento de assentos'],
@@ -402,6 +402,7 @@ export function SchedulePage() {
     {scheduleTab === 'open' && <div className="space-y-3">{displayedSchedules.map(schedule => {
       const isExpanded = expandedScheduleIds.includes(schedule.id)
       const isEditing = editingScheduleIds.includes(schedule.id)
+      const volunteersInOtherServices = isEditing ? volunteerIdsInOtherServices(schedules, schedule.service_date, schedule.id) : null
       const volunteerCount = new Set(schedule.assignments.map(item => item.volunteer_profile_id)).size
       const assignedVolunteers = [...new Map(schedule.assignments.map(item => [item.volunteer_profile_id, item.volunteer?.display_name ?? 'Voluntário'])).entries()]
       const repeatVolunteers = isAdmin ? assignedVolunteers.filter(([id]) => servedSameServiceLastWeek(schedules, schedule, id)) : []
@@ -447,15 +448,17 @@ export function SchedulePage() {
                   : new Set(assigned.map(item => item.volunteer_profile_id))
                 const selectableVolunteers = volunteers.filter(person => {
                   const hasPrimaryRole = schedule.assignments.some(item => item.volunteer_profile_id === person.id && primaryRoleKeys.has(item.ministry_role))
-                  const eligibleForGroup = group.title !== 'Responsabilidades complementares' || hasPrimaryRole
+                  const eligibleForGroup = group.title === 'Responsabilidades complementares'
+                    ? hasPrimaryRole
+                    : !volunteersInOtherServices?.has(person.id)
                   return eligibleForGroup && !assignedVolunteerIds.has(person.id)
                 })
                 const portariaFull = key === 'portaria' && assigned.length >= portariaVolunteerLimit
                 return <div key={key} className="grid min-w-0 gap-2 px-4 py-3 sm:grid-cols-[minmax(190px,.8fr)_minmax(0,1.5fr)] sm:items-start sm:px-5">
                   <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <p className="flex items-center gap-2 break-words text-sm font-medium">{label}{key === 'portaria' && <span className="rounded-full bg-[#F0E6D2] px-2 py-0.5 text-xs font-medium text-[#6B4F1D]">{assigned.length}/{portariaVolunteerLimit}</span>}</p>
-                    {isAdmin && isEditing && group.assignable && <select aria-label={`Selecionar voluntário para ${label}`} className="form-input h-10 w-full text-sm sm:max-w-56" value="" disabled={saving || volunteers.length === 0 || portariaFull || (group.title === 'Responsabilidades complementares' && !schedule.assignments.some(item => primaryRoleKeys.has(item.ministry_role)))} onChange={event => { if (event.target.value) void addAssignment(schedule, key, event.target.value) }}>
-                      <option value="">{portariaFull ? 'Limite de quatro voluntários atingido' : group.title === 'Responsabilidades complementares' && !schedule.assignments.some(item => primaryRoleKeys.has(item.ministry_role)) ? 'Adicione uma função principal primeiro' : 'Adicionar voluntário'}</option>
+                    {isAdmin && isEditing && group.assignable && <select aria-label={`Selecionar voluntário para ${label}`} className="form-input h-10 w-full text-sm sm:max-w-56" value="" disabled={saving || !selectableVolunteers.length || portariaFull} onChange={event => { if (event.target.value) void addAssignment(schedule, key, event.target.value) }}>
+                      <option value="">{portariaFull ? 'Limite de quatro voluntários atingido' : group.title === 'Responsabilidades complementares' && !schedule.assignments.some(item => primaryRoleKeys.has(item.ministry_role)) ? 'Adicione uma função principal primeiro' : !selectableVolunteers.length ? 'Nenhum voluntário disponível' : 'Adicionar voluntário'}</option>
                       {selectableVolunteers.map(person => {
                         const selectedThursday = scheduledOnThursdayThisWeek(schedules, schedule, person.id)
                         return <option key={person.id} value={person.id} className={selectedThursday ? 'text-gray-400' : undefined} style={selectedThursday ? { color: '#9ca3af' } : undefined}>{person.display_name}{selectedThursday ? ' — já escalado na quinta' : ''}</option>

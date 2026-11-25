@@ -16,6 +16,13 @@ function weekStart(value: string) {
   return date.toISOString().slice(0, 10)
 }
 
+export function volunteerIdsInOtherServices(schedules: AssignmentSchedule[], serviceDate: string, scheduleId?: string) {
+  const targetWeek = weekStart(serviceDate)
+  return new Set(schedules
+    .filter(schedule => schedule.id !== scheduleId && weekStart(schedule.service_date) === targetWeek)
+    .flatMap(schedule => schedule.assignments.map(item => item.volunteer_profile_id)))
+}
+
 export function servedSameServiceLastWeek(schedules: AssignmentSchedule[], target: AssignmentSchedule, volunteerId: string) {
   const date = dateAtUtc(target.service_date)
   date.setUTCDate(date.getUTCDate() - 7)

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Info, X } from 'lucide-react'
-import { scheduledOnThursdayThisWeek, servedSameServiceLastWeek } from './assignment-warnings'
+import { servedSameServiceLastWeek, volunteerIdsInOtherServices } from './assignment-warnings'
 import type { HistorySchedule } from './ScheduleHistoryTable'
 
 export type NewScheduleAssignment = { volunteer_profile_id: string; ministry_role: string }
@@ -27,6 +27,8 @@ export function CreateScheduleDialog({ date, service, volunteers, schedules, sav
   const [validationError, setValidationError] = useState('')
   const dialogRef = useRef<HTMLElement>(null)
   const target = { id: 'new-schedule', service_date: date, service_label: service, assignments: [] }
+  const volunteersInOtherServices = volunteerIdsInOtherServices(schedules, date)
+  const availableVolunteers = volunteers.filter(person => !volunteersInOtherServices.has(person.id))
   const primaryIds = new Set(assignments.filter(item => item.ministry_role === 'portaria' || item.ministry_role === 'seat_direction').map(item => item.volunteer_profile_id))
   const selectedCount = primaryIds.size
   const portariaCount = assignments.filter(item => item.ministry_role === 'portaria').length
@@ -75,7 +77,7 @@ export function CreateScheduleDialog({ date, service, volunteers, schedules, sav
             {!group.primary && <p className="px-4 pt-3 text-xs leading-5 text-muted">Escolha primeiro os voluntários das funções principais. Ao removê-los da função principal, suas responsabilidades complementares também serão removidas.</p>}
             <div className="divide-y divide-border">{group.roles.map(([key, label]) => {
               const assigned = assignments.filter(item => item.ministry_role === key)
-              const eligible = volunteers.filter(person => (group.primary ? !primaryIds.has(person.id) : primaryIds.has(person.id)) && !assigned.some(item => item.volunteer_profile_id === person.id))
+              const eligible = availableVolunteers.filter(person => (group.primary ? !primaryIds.has(person.id) : primaryIds.has(person.id)) && !assigned.some(item => item.volunteer_profile_id === person.id))
               const full = key === 'portaria' && portariaCount >= 4
               return <div key={key} className="grid min-w-0 gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
                 <label className="min-w-0 text-sm font-medium">{label}{key === 'portaria' && <span className="ml-2 text-xs text-muted">{portariaCount}/4</span>}
@@ -84,10 +86,7 @@ export function CreateScheduleDialog({ date, service, volunteers, schedules, sav
                     if (!id) return
                     setValidationError('')
                     setAssignments(current => [...current, { volunteer_profile_id: id, ministry_role: key }])
-                  }}><option value="">{full ? 'Limite de quatro voluntários' : !group.primary && !primaryIds.size ? 'Escolha uma função principal primeiro' : 'Adicionar voluntário'}</option>{eligible.map(person => {
-                    const thursday = scheduledOnThursdayThisWeek(schedules, target, person.id)
-                    return <option key={person.id} value={person.id} className={thursday ? 'text-gray-400' : undefined} style={thursday ? { color: '#9ca3af' } : undefined}>{person.display_name}{thursday ? ' — já escalado na quinta' : ''}</option>
-                  })}</select>
+                  }}><option value="">{full ? 'Limite de quatro voluntários' : !group.primary && !primaryIds.size ? 'Escolha uma função principal primeiro' : 'Adicionar voluntário'}</option>{eligible.map(person => <option key={person.id} value={person.id}>{person.display_name}</option>)}</select>
                 </label>
                 <div className="flex min-w-0 flex-wrap content-start items-start gap-2 sm:pt-7">{assigned.map(item => {
                   const name = volunteers.find(person => person.id === item.volunteer_profile_id)?.display_name ?? 'Voluntário'
@@ -96,11 +95,11 @@ export function CreateScheduleDialog({ date, service, volunteers, schedules, sav
               </div>
             })}</div>
           </section>)}
-          {!volunteers.length && <p className="py-6 text-center text-sm text-muted">Nenhum voluntário ativo disponível.</p>}
+          {!availableVolunteers.length && <p className="py-6 text-center text-sm text-muted">Nenhum voluntário ativo disponível para os cultos desta semana.</p>}
         </div>
         <footer className="shrink-0 border-t border-border bg-white p-4 sm:p-5">
           {(validationError || error) && <p role="alert" className="status-negative mb-3 rounded-lg border px-3 py-2 text-sm">{validationError || error}</p>}
-          <div className="flex justify-end gap-2"><button type="button" disabled={saving} onClick={onCancel} className="min-h-11 rounded-lg border border-border px-4 text-sm disabled:opacity-50">Cancelar</button><button type="submit" disabled={saving || !volunteers.length} className="min-h-11 rounded-lg bg-primary px-5 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Salvando...' : 'Salvar'}</button></div>
+          <div className="flex justify-end gap-2"><button type="button" disabled={saving} onClick={onCancel} className="min-h-11 rounded-lg border border-border px-4 text-sm disabled:opacity-50">Cancelar</button><button type="submit" disabled={saving || !availableVolunteers.length} className="min-h-11 rounded-lg bg-primary px-5 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Salvando...' : 'Salvar'}</button></div>
         </footer>
       </form>
     </section>

@@ -8,11 +8,14 @@ vi.mock('../../lib/supabase', () => ({ supabase: mocks }))
 import { SchedulePage } from './SchedulePage'
 
 describe('create a schedule with volunteers', () => {
+  let schedules: unknown[]
+  let assignments: unknown[]
+
   beforeEach(() => {
-    const schedules: unknown[] = []
-    const assignments: unknown[] = []
+    schedules = []
+    assignments = []
     mocks.from.mockImplementation((table: string) => {
-      const data = table === 'profiles' ? [{ id: 'person-1', display_name: 'Bruna' }] : table === 'ministry_schedules' ? [...schedules] : table === 'ministry_schedule_assignments' ? [...assignments] : []
+      const data = table === 'profiles' ? [{ id: 'person-1', display_name: 'Bruna' }, { id: 'person-2', display_name: 'Ana' }] : table === 'ministry_schedules' ? [...schedules] : table === 'ministry_schedule_assignments' ? [...assignments] : []
       const query = { select: () => query, order: () => query, eq: () => query,
         then: (resolve: (result: unknown) => unknown) => Promise.resolve({ data, error: null }).then(resolve) }
       return query
@@ -40,6 +43,32 @@ describe('create a schedule with volunteers', () => {
     fireEvent.click(modal.getByRole('button', { name: 'Cancelar' }))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('filters assignments in the same week only when selecting volunteers for a normal service', async () => {
+    schedules.push(
+      { id: 'same-week', service_date: '2099-12-13', service_label: 'Domingo às 18h', published_at: null, special_observation: null },
+      { id: 'previous-week', service_date: '2099-12-06', service_label: 'Domingo às 18h', published_at: null, special_observation: null },
+    )
+    assignments.push(
+      { id: 'same-week-assignment', schedule_id: 'same-week', volunteer_profile_id: 'person-1', ministry_role: 'portaria' },
+      { id: 'previous-week-assignment', schedule_id: 'previous-week', volunteer_profile_id: 'person-2', ministry_role: 'portaria' },
+    )
+    render(<MemoryRouter><SchedulePage /></MemoryRouter>)
+    await screen.findAllByText('Domingo às 18h')
+    fireEvent.change(screen.getByLabelText('Dia do culto'), { target: { value: '2099-12-13' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Criar escala' }))
+    const modal = within(await screen.findByRole('dialog', { name: 'Distribuir funções' }))
+    const portaria = within(modal.getByRole('combobox', { name: 'Selecionar voluntário para Portaria' }))
+    expect(portaria.queryByRole('option', { name: 'Bruna' })).toBeNull()
+    expect(portaria.getByRole('option', { name: 'Ana' })).toBeTruthy()
+    fireEvent.click(modal.getByRole('button', { name: 'Cancelar' }))
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Escala extra' }))
+    fireEvent.change(screen.getByLabelText('Data'), { target: { value: '2099-12-13' } })
+    const member = await screen.findByRole<HTMLInputElement>('checkbox', { name: 'Bruna' })
+    fireEvent.click(member)
+    expect(member.checked).toBe(true)
   })
 
   it('validates the team, saves all assignments together and returns to the normal schedule', async () => {
