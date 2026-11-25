@@ -31,7 +31,6 @@ export function CreateScheduleDialog({ date, service, volunteers, schedules, sav
   const availableVolunteers = volunteers.filter(person => !volunteersInOtherServices.has(person.id))
   const primaryIds = new Set(assignments.filter(item => item.ministry_role === 'portaria' || item.ministry_role === 'seat_direction').map(item => item.volunteer_profile_id))
   const selectedCount = primaryIds.size
-  const portariaCount = assignments.filter(item => item.ministry_role === 'portaria').length
   const repeatedVolunteers = volunteers.filter(person => primaryIds.has(person.id) && servedSameServiceLastWeek(schedules, target, person.id))
 
   useEffect(() => {
@@ -47,7 +46,6 @@ export function CreateScheduleDialog({ date, service, volunteers, schedules, sav
     if (saving) return
     setValidationError('')
     if (!selectedCount) { setValidationError('Selecione pelo menos um voluntário.'); return }
-    if (portariaCount > 4) { setValidationError('Portaria permite no máximo quatro voluntários por culto.'); return }
     onSave(assignments)
   }
 
@@ -67,7 +65,7 @@ export function CreateScheduleDialog({ date, service, volunteers, schedules, sav
       </header>
       <form onSubmit={save} className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-5">
-          <p className="text-xs font-medium text-muted">{selectedCount} selecionado(s) · Portaria: {portariaCount}/4</p>
+          <p className="text-xs font-medium text-muted">{selectedCount} selecionado(s)</p>
           {repeatedVolunteers.map(person => <p key={person.id} role="status" className="status-pending flex items-start gap-2 rounded-lg border px-3 py-2 text-xs leading-5"><Info size={14} className="mt-0.5 shrink-0"/><span><strong>{person.display_name}:</strong> essa pessoa serviu nesse culto na semana passada</span></p>)}
           {[
             { title: 'Funções principais', roles: primaryRoles, primary: true },
@@ -78,15 +76,14 @@ export function CreateScheduleDialog({ date, service, volunteers, schedules, sav
             <div className="divide-y divide-border">{group.roles.map(([key, label]) => {
               const assigned = assignments.filter(item => item.ministry_role === key)
               const eligible = availableVolunteers.filter(person => (group.primary ? !primaryIds.has(person.id) : primaryIds.has(person.id)) && !assigned.some(item => item.volunteer_profile_id === person.id))
-              const full = key === 'portaria' && portariaCount >= 4
               return <div key={key} className="grid min-w-0 gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-                <label className="min-w-0 text-sm font-medium">{label}{key === 'portaria' && <span className="ml-2 text-xs text-muted">{portariaCount}/4</span>}
-                  <select aria-label={`Selecionar voluntário para ${label}`} value="" disabled={saving || full || !eligible.length} className="form-input mt-2" onChange={event => {
+                <label className="min-w-0 text-sm font-medium">{label}{key === 'portaria' && <span className="ml-2 text-xs text-muted">{assigned.length}</span>}
+                  <select aria-label={`Selecionar voluntário para ${label}`} value="" disabled={saving || !eligible.length} className="form-input mt-2" onChange={event => {
                     const id = event.target.value
                     if (!id) return
                     setValidationError('')
                     setAssignments(current => [...current, { volunteer_profile_id: id, ministry_role: key }])
-                  }}><option value="">{full ? 'Limite de quatro voluntários' : !group.primary && !primaryIds.size ? 'Escolha uma função principal primeiro' : 'Adicionar voluntário'}</option>{eligible.map(person => <option key={person.id} value={person.id}>{person.display_name}</option>)}</select>
+                  }}><option value="">{!group.primary && !primaryIds.size ? 'Escolha uma função principal primeiro' : !eligible.length ? 'Nenhum voluntário disponível' : 'Adicionar voluntário'}</option>{eligible.map(person => <option key={person.id} value={person.id}>{person.display_name}</option>)}</select>
                 </label>
                 <div className="flex min-w-0 flex-wrap content-start items-start gap-2 sm:pt-7">{assigned.map(item => {
                   const name = volunteers.find(person => person.id === item.volunteer_profile_id)?.display_name ?? 'Voluntário'

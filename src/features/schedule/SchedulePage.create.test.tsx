@@ -10,12 +10,14 @@ import { SchedulePage } from './SchedulePage'
 describe('create a schedule with volunteers', () => {
   let schedules: unknown[]
   let assignments: unknown[]
+  let profiles: { id: string; display_name: string }[]
 
   beforeEach(() => {
     schedules = []
     assignments = []
+    profiles = [{ id: 'person-1', display_name: 'Bruna' }, { id: 'person-2', display_name: 'Ana' }]
     mocks.from.mockImplementation((table: string) => {
-      const data = table === 'profiles' ? [{ id: 'person-1', display_name: 'Bruna' }, { id: 'person-2', display_name: 'Ana' }] : table === 'ministry_schedules' ? [...schedules] : table === 'ministry_schedule_assignments' ? [...assignments] : []
+      const data = table === 'profiles' ? profiles : table === 'ministry_schedules' ? [...schedules] : table === 'ministry_schedule_assignments' ? [...assignments] : []
       const query = { select: () => query, order: () => query, eq: () => query,
         then: (resolve: (result: unknown) => unknown) => Promise.resolve({ data, error: null }).then(resolve) }
       return query
@@ -87,6 +89,22 @@ describe('create a schedule with volunteers', () => {
     })
     expect(screen.getByRole('button', { name: 'Editar escala' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Publicar escala' })).toBeTruthy()
+  })
+
+  it('lets the admin select and save more than four volunteers for Portaria', async () => {
+    profiles.push({ id: 'person-3', display_name: 'Jasmine' }, { id: 'person-4', display_name: 'Mikaelly' }, { id: 'person-5', display_name: 'Naiara' })
+    const modal = await openModal()
+    const portaria = modal.getByRole<HTMLSelectElement>('combobox', { name: 'Selecionar voluntário para Portaria' })
+    for (const person of profiles) {
+      expect(portaria.disabled).toBe(false)
+      expect(within(portaria).getByRole('option', { name: person.display_name })).toBeTruthy()
+      fireEvent.change(portaria, { target: { value: person.id } })
+    }
+    fireEvent.click(modal.getByRole('button', { name: 'Salvar' }))
+    await screen.findByText(/Escala criada com os voluntários selecionados/)
+    expect(mocks.rpc).toHaveBeenCalledWith('create_ministry_schedule_with_assignments', expect.objectContaining({
+      p_assignments: profiles.map(person => ({ volunteer_profile_id: person.id, ministry_role: 'portaria' })),
+    }))
   })
 
   it('keeps the team selected when saving fails and allows retrying', async () => {

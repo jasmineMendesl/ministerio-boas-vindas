@@ -22,6 +22,7 @@ try {
     '202611090003_schedule_portaria_limit.sql', '202611090004_schedule_observations.sql',
     '202611090005_schedule_attendance.sql', '202611120003_fix_schedule_cascade_delete.sql',
     '202611120004_create_schedule_with_assignments.sql',
+    '202611250001_allow_flexible_portaria_teams.sql',
   ]) await db.exec(await readFile(new URL(`../supabase/migrations/${file}`, import.meta.url), 'utf8'))
   const ids = Array.from({ length: 7 }, (_, index) => `10000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`)
   for (const id of ids) await db.query('insert into auth.users(id) values ($1)', [id])
@@ -42,16 +43,21 @@ try {
   await assertNoPartialSave('2026-11-22', [], /Select volunteers/)
   await assertNoPartialSave('2026-11-22', [assignments[0]], /requires a primary role/)
   await assertNoPartialSave('2026-11-22', [...assignments, assignments[0]], /unique constraint/)
-  await assertNoPartialSave('2026-11-22', ids.slice(1, 6).map(id => ({ volunteer_profile_id: id, ministry_role: 'portaria' })), /at most four/)
   await assertNoPartialSave('2026-11-22', [{ volunteer_profile_id: team, ministry_role: 'invalid' }], /check constraint/)
   await assert.rejects(() => call('2026-11-15', assignments), /unique constraint/)
+  const portariaVolunteers = ids.slice(1, 6).map(id => ({ volunteer_profile_id: id, ministry_role: 'portaria' }))
+  const largerSchedule = (await call('2026-11-29', portariaVolunteers)).rows[0].id
+  const getPortariaTeam = () => db.query("select volunteer_profile_id from public.ministry_schedule_assignments where schedule_id = $1 and ministry_role = 'portaria' order by volunteer_profile_id", [largerSchedule])
+  assert.deepEqual((await getPortariaTeam()).rows.map(row => row.volunteer_profile_id), ids.slice(1, 6))
+  await db.query("insert into public.ministry_schedule_assignments (schedule_id, volunteer_profile_id, ministry_role) values ($1, $2, 'portaria')", [largerSchedule, ids[6]])
+  assert.deepEqual((await getPortariaTeam()).rows.map(row => row.volunteer_profile_id), ids.slice(1))
   await db.exec(`select set_config('request.jwt.claim.sub', '${team}', false)`)
   await assert.rejects(() => call('2026-11-22', assignments), /Not authorized/)
   await db.exec('reset role')
   await db.query('update public.profiles set active = false where id = $1', [team])
   await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub', '${admin}', false)`)
   await assertNoPartialSave('2026-11-22', assignments, /active volunteers/)
-  console.log('Schedule creation verified: atomic save, roles and attendance, rollback on validation failures, active profiles and admin authorization.')
+  console.log('Schedule creation verified: atomic save, flexible Portaria teams, roles and attendance, rollback on validation failures, active profiles and admin authorization.')
 } finally {
   await db.close()
 }
