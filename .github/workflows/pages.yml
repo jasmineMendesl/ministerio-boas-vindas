@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -16,6 +17,8 @@ concurrency:
 
 jobs:
   deploy:
+    env:
+      PAGES_ARTIFACT_NAME: github-pages-${{ github.run_attempt }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -40,9 +43,28 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY || vars.VITE_SUPABASE_ANON_KEY }}
           VITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}
       - name: Upload Pages artifact
+        id: upload
         uses: actions/upload-pages-artifact@v4
         with:
+          name: ${{ env.PAGES_ARTIFACT_NAME }}
           path: dist
+      - name: Wait for the Pages artifact
+        timeout-minutes: 2
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAGES_ARTIFACT_ID: ${{ steps.upload.outputs.artifact_id }}
+        run: |
+          for attempt in {1..12}; do
+            if artifact_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=$PAGES_ARTIFACT_NAME" --jq '.artifacts[0].id // empty') &&
+               [[ -n "$PAGES_ARTIFACT_ID" && "$artifact_id" == "$PAGES_ARTIFACT_ID" ]]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::The uploaded Pages artifact did not appear in the workflow run."
+          exit 1
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: ${{ env.PAGES_ARTIFACT_NAME }}
